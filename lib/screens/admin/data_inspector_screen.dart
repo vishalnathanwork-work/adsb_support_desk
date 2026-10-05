@@ -104,7 +104,6 @@ class _DataInspectorScreenState extends State<DataInspectorScreen> {
         padding: const EdgeInsets.all(12),
         children: _data.entries.map((e) {
           final value = e.value;
-          final count = value is List ? value.length : 1;
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: ExpansionTile(

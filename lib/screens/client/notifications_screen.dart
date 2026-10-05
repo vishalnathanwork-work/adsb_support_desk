@@ -52,6 +52,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _load();
   }
 
+  Future<void> markAsRead(String notificationId) async {
+    await ApiClient.post('notifications.php', {
+      'action': 'mark_read',
+      'notification_id': notificationId,
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

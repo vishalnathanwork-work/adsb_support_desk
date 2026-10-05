@@ -174,4 +174,11 @@ class TicketService {
   Future<void> cancelTicket(String id) async {
     await updateTicketFields(id, {'status': 'cancelled'});
   }
+
+  Future<void> assignToMe(String ticketId, String agentEmail, String agentName) async {
+    await updateTicketFields(ticketId, {
+      'assigned_to': agentEmail,
+      'assigned_to_name': agentName,
+    });
+  }
 }

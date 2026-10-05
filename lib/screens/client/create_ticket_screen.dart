@@ -58,24 +58,24 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
     final site = Presets.sites.firstWhere((s) => s['id'] == _selectedSiteId);
 
-    final ticket = await _ticketService.createTicket(
-      createdBy: widget.user.email,
-      createdByName: widget.user.name,
-      createdByRole: widget.user.role,
-      siteLocation: site['address']!,
-      siteName: site['name']!,
-      productType: _selectedProductType!,
-      productIssue: _selectedProductIssue!,
-      contactName: _contactNameController.text.trim(),
-      contactPhone: _contactPhoneController.text.trim(),
-      description: _descriptionController.text.trim(),
-      imagePaths: _imagePaths,
-    );
+    final ticket = await _ticketService.createTicket(...);
+
+    if (ticket == null) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to create ticket. Please check your connection.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
     // Notify the creator
     await _notificationService.addNotification(
       userId: widget.user.email,
-      ticketId: ticket.id,
+      ticketId: ticket.id,      // ✅ safe now
       title: 'Ticket Submitted',
       body: 'Your ticket ${ticket.id} has been received.',
       type: 'status_update',

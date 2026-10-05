@@ -4,9 +4,7 @@ import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/notification_service.dart';
 import '../../services/ticket_service.dart';
-import '../../utils/date_formatter.dart';
 import '../../widgets/status_badge.dart';
-import '../../widgets/action_dialog.dart';
 import 'adsb_chat_screen.dart';
 
 class OnsiteJobScreen extends StatefulWidget {

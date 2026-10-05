@@ -3,7 +3,6 @@
 // This test verifies the app boots up and shows the login screen
 // when no user is logged in.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:adsb_support_desk/app.dart';

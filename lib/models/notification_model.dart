@@ -1,10 +1,10 @@
 class AppNotification {
   final String id;
-  final String userId;      // recipient email
-  final String ticketId;    // linked ticket
+  final String userId;
+  final String ticketId;
   final String title;
   final String body;
-  final String type;        // status_update | comment | schedule | resolved
+  final String type;
   final DateTime createdAt;
   bool isRead;
 
@@ -21,24 +21,26 @@ class AppNotification {
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'userId': userId,
-    'ticketId': ticketId,
+    'user_email': userId,
+    'ticket_id': ticketId,
     'title': title,
     'body': body,
     'type': type,
-    'createdAt': createdAt.toIso8601String(),
-    'isRead': isRead,
+    'created_at': createdAt.toIso8601String(),
+    'is_read': isRead ? 1 : 0,
   };
 
   factory AppNotification.fromJson(Map<String, dynamic> json) =>
       AppNotification(
-        id: json['id'],
-        userId: json['userId'],
-        ticketId: json['ticketId'],
-        title: json['title'],
-        body: json['body'],
-        type: json['type'],
-        createdAt: DateTime.parse(json['createdAt']),
-        isRead: json['isRead'] ?? false,
+        id: json['id'].toString(),
+        userId: json['user_email'] ?? '',
+        ticketId: json['ticket_id'] ?? '',
+        title: json['title'] ?? '',
+        body: json['body'] ?? '',
+        type: json['type'] ?? '',
+        createdAt: json['created_at'] != null
+            ? DateTime.parse(json['created_at'])
+            : DateTime.now(),
+        isRead: json['is_read'] == 1 || json['is_read'] == true,
       );
 }
