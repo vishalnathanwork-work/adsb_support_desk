@@ -39,7 +39,7 @@ dependencies:
   uuid: ^4.5.1          # ← ADD
   intl: ^0.19.0         # ← ADD
   url_launcher: ^6.3.0    # ← ADD
-
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

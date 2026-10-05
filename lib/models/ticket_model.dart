@@ -51,56 +51,56 @@ class Ticket {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'createdBy': createdBy,
-    'createdByName': createdByName,
-    'createdByRole': createdByRole,
-    'siteLocation': siteLocation,
-    'siteName': siteName,
-    'productType': productType,
-    'productIssue': productIssue,
-    'contactName': contactName,
-    'contactPhone': contactPhone,
+    'ticket_id': id,
+    'created_by': createdBy,
+    'created_by_name': createdByName,
+    'created_by_role': createdByRole,
+    'site_location': siteLocation,
+    'site_name': siteName,
+    'product_type': productType,
+    'product_issue': productIssue,
+    'contact_name': contactName,
+    'contact_phone': contactPhone,
     'description': description,
-    'imagePaths': imagePaths,
     'status': status,
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
-    'rootCause': rootCause,
-    'solutionApplied': solutionApplied,
-    'resolutionNotes': resolutionNotes,
-    'resolvedAt': resolvedAt?.toIso8601String(),
-
-    'assignedTo': assignedTo,
-    'assignedToName': assignedToName,
+    'assigned_to': assignedTo,
+    'assigned_to_name': assignedToName,
+    'root_cause': rootCause,
+    'solution_applied': solutionApplied,
+    'resolution_notes': resolutionNotes,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'resolved_at': resolvedAt?.toIso8601String(),
   };
 
   factory Ticket.fromJson(Map<String, dynamic> json) => Ticket(
-    id: json['id'],
-    createdBy: json['createdBy'],
-    createdByName: json['createdByName'],
-    createdByRole: json['createdByRole'],
-    siteLocation: json['siteLocation'],
-    siteName: json['siteName'],
-    productType: json['productType'],
-    productIssue: json['productIssue'],
-    contactName: json['contactName'],
-    contactPhone: json['contactPhone'],
+    id: json['ticket_id'] ?? json['id'] ?? '',
+    createdBy: json['created_by'] ?? '',
+    createdByName: json['created_by_name'] ?? '',
+    createdByRole: json['created_by_role'] ?? 'client',
+    siteLocation: json['site_location'] ?? '',
+    siteName: json['site_name'] ?? '',
+    productType: json['product_type'] ?? '',
+    productIssue: json['product_issue'] ?? '',
+    contactName: json['contact_name'] ?? '',
+    contactPhone: json['contact_phone'] ?? '',
     description: json['description'] ?? '',
-    imagePaths: List<String>.from(json['imagePaths'] ?? []),
-    status: json['status'],
-    createdAt: DateTime.parse(json['createdAt']),
-    updatedAt: DateTime.parse(json['updatedAt']),
-    rootCause: json['rootCause'],
-    solutionApplied: json['solutionApplied'],
-    resolutionNotes: json['resolutionNotes'],
-    resolvedAt: json['resolvedAt'] != null
-        ? DateTime.parse(json['resolvedAt'])
+    imagePaths: [],
+    status: json['status'] ?? 'pending',
+    createdAt: json['created_at'] != null
+        ? DateTime.parse(json['created_at'])
+        : DateTime.now(),
+    updatedAt: json['updated_at'] != null
+        ? DateTime.parse(json['updated_at'])
+        : DateTime.now(),
+    assignedTo: json['assigned_to'],
+    assignedToName: json['assigned_to_name'],
+    rootCause: json['root_cause'],
+    solutionApplied: json['solution_applied'],
+    resolutionNotes: json['resolution_notes'],
+    resolvedAt: json['resolved_at'] != null
+        ? DateTime.parse(json['resolved_at'])
         : null,
-
-    // Add to fromJson():
-    assignedTo: json['assignedTo'],
-    assignedToName: json['assignedToName'],
   );
 
   Ticket copyWith({

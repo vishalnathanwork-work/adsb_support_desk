@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import '../models/user_model.dart';
-import '../services/session_service.dart';
 
 class MainNavigation extends StatefulWidget {
   final UserModel user;
@@ -23,14 +22,17 @@ class NavTab {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _index = 0;
-  final _session = SessionService();
 
   @override
   Widget build(BuildContext context) {
-    final page = widget.tabs[_index].page;
+    // Safely reset index if tabs list changes
+    if (_index >= widget.tabs.length) _index = 0;
 
     return Scaffold(
-      body: page,
+      body: IndexedStack(
+        index: _index,
+        children: widget.tabs.map((t) => t.page).toList(),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),

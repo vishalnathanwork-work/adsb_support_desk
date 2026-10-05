@@ -1,40 +1,81 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/session_service.dart';
+import '../../services/ticket_service.dart';
 import '../main_navigation.dart';
 import '../client/client_profile_tab.dart';
+import 'admin_all_ticket_screen.dart';
+import 'admin_team_management_screen.dart';
+import 'admin_users_screen.dart';
+import 'admin_presets_screen.dart';
+import 'data_inspector_screen.dart';
+import 'analytics_screen.dart';
 
-class AdminDashboard extends StatelessWidget {
+class AdminDashboard extends StatefulWidget {
   final UserModel user;
 
   const AdminDashboard({super.key, required this.user});
 
   @override
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  List<Ticket> _all = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final list = await TicketService().getAllTickets();
+    if (!mounted) return;
+    setState(() {
+      _all = list;
+      _isLoading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MainNavigation(
-      user: user,
+      user: widget.user,
       tabs: [
         NavTab(
           label: 'Home',
           icon: Icons.home_outlined,
-          page: _AdminHome(user: user),
+          page: _AdminHome(
+            user: widget.user,
+            tickets: _all,
+            isLoading: _isLoading,
+            onRefresh: _load,
+          ),
         ),
         NavTab(
           label: 'Tickets',
           icon: Icons.confirmation_number_outlined,
-          page: _AdminAllTickets(),
+          page: AdminAllTicketsScreen(user: widget.user),
         ),
         NavTab(
           label: 'Teams',
           icon: Icons.groups_outlined,
-          page: _AdminTeams(),
+          page: AdminTeamManagementScreen(user: widget.user),
+        ),
+        NavTab(
+          label: 'Users',
+          icon: Icons.people_outline,
+          page: AdminUsersScreen(user: widget.user),
         ),
         NavTab(
           label: 'Profile',
           icon: Icons.person_outline,
           page: ClientProfileTab(
-            user: user,
+            user: widget.user,
             onLogout: () async {
               await SessionService().clear();
               if (context.mounted) {
@@ -51,94 +92,191 @@ class AdminDashboard extends StatelessWidget {
 
 class _AdminHome extends StatelessWidget {
   final UserModel user;
-  const _AdminHome({required this.user});
+  final List<Ticket> tickets;
+  final bool isLoading;
+  final VoidCallback onRefresh;
+
+  const _AdminHome({
+    required this.user,
+    required this.tickets,
+    required this.isLoading,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final total = tickets.length;
+    final open = tickets
+        .where((t) =>
+    t.status == 'pending' ||
+        t.status == 'verified' ||
+        t.status == 'in_progress')
+        .length;
+    final resolved =
+        tickets.where((t) => t.status == 'resolved' || t.status == 'closed').length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.analytics_outlined),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A1A), Color(0xFF333333)],
+        child: RefreshIndicator(
+          onRefresh: () async => onRefresh(),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A1A1A), Color(0xFF333333)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Administrator',
+                        style:
+                        TextStyle(color: Colors.white70, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Text(user.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 24),
+              const Text('Key Metrics',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
                 children: [
-                  const Text('Administrator',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(user.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _kpiCard('Total', '$total',
+                            Icons.list_alt_outlined, AppColors.primary),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _kpiCard('Open', '$open',
+                            Icons.pending_outlined, AppColors.warning),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _kpiCard(
+                            'Resolved',
+                            '$resolved',
+                            Icons.check_circle_outline,
+                            AppColors.success),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _kpiCard('Avg Time', '—',
+                            Icons.timer_outlined, AppColors.accent),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text('Key Metrics',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                    child: _kpiCard('Total', '0', Icons.list_alt_outlined,
-                        AppColors.primary)),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _kpiCard('Open', '0', Icons.pending_outlined,
-                        AppColors.warning)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                    child: _kpiCard('Resolved', '0', Icons.check_circle_outline,
-                        AppColors.success)),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _kpiCard('Avg Time', '—', Icons.timer_outlined,
-                        AppColors.accent)),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const Text('Management',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            _actionTile(Icons.confirmation_number_outlined,
-                'All Tickets', 'View and manage all tickets', AppColors.primary),
-            _actionTile(Icons.groups_outlined, 'Team Management',
-                'ADSB + TT members', AppColors.accent),
-            _actionTile(Icons.people_outline, 'User Management',
-                'Clients and operators', AppColors.warning),
-            _actionTile(Icons.analytics_outlined, 'Analytics & Reporting',
-                'KPIs, trends, insights', AppColors.success),
-            _actionTile(Icons.tune, 'System Presets',
-                'Product types, issues, solutions', AppColors.textSecondary),
-            _actionTile(Icons.menu_book_outlined, 'Knowledge Base',
-                'FAQ articles', AppColors.primaryDark),
-          ],
+              const SizedBox(height: 24),
+              const Text('Management',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              _actionTile(
+                context,
+                Icons.confirmation_number_outlined,
+                'All Tickets',
+                'View and manage all tickets',
+                AppColors.primary,
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminAllTicketsScreen(user: user),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
+                Icons.groups_outlined,
+                'Team Management',
+                'ADSB + TT members',
+                AppColors.accent,
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminTeamManagementScreen(user: user),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
+                Icons.people_outline,
+                'User Management',
+                'Clients and operators',
+                AppColors.warning,
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminUsersScreen(user: user),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
+                Icons.tune,
+                'System Presets',
+                'Product types, issues, sites',
+                AppColors.textSecondary,
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminPresetsScreen(),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
+                Icons.analytics_outlined,
+                'Analytics & Reporting',
+                'KPIs, trends, insights',
+                AppColors.success,
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AnalyticsScreen(),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
+                Icons.storage_outlined,
+                'Data Inspector',
+                'View all locally stored data',
+                const Color(0xFF7C3AED),
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DataInspectorScreen(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -170,69 +308,53 @@ class _AdminHome extends StatelessWidget {
   }
 
   Widget _actionTile(
-      IconData icon, String title, String subtitle, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+      BuildContext context,
+      IconData icon,
+      String title,
+      String subtitle,
+      Color color,
+      VoidCallback onTap,
+      ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
             ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdminAllTickets extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('All Tickets')),
-      body: const Center(
-        child: Text('Ticket list coming soon',
-            style: TextStyle(color: AppColors.textSecondary)),
-      ),
-    );
-  }
-}
-
-class _AdminTeams extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Team Management')),
-      body: const Center(
-        child: Text('Team list coming soon',
-            style: TextStyle(color: AppColors.textSecondary)),
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          ],
+        ),
       ),
     );
   }

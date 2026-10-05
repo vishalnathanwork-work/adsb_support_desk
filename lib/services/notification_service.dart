@@ -49,3 +49,51 @@ class NotificationService {
     }
   }
 }
+
+import '../models/notification_model.dart';
+import 'api_client.dart';
+
+class NotificationService {
+  Future<List<AppNotification>> getMyNotifications(String userEmail) async {
+    final response = await ApiClient.get('notifications.php', query: {
+      'action': 'mine',
+      'email': userEmail,
+    });
+
+    if (response['success'] == true && response['notifications'] != null) {
+      return (response['notifications'] as List)
+          .map((j) => AppNotification.fromJson(j))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<void> addNotification({
+    required String userId,
+    required String ticketId,
+    required String title,
+    required String body,
+    required String type,
+  }) async {
+    await ApiClient.post('notifications.php', {
+      'user_email': userId,
+      'ticket_id': ticketId,
+      'title': title,
+      'body': body,
+      'type': type,
+    });
+  }
+}
+
+factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
+id: json['id'].toString(),
+userId: json['user_email'] ?? '',
+ticketId: json['ticket_id'] ?? '',
+title: json['title'] ?? '',
+body: json['body'] ?? '',
+type: json['type'] ?? '',
+createdAt: json['created_at'] != null
+? DateTime.parse(json['created_at'])
+    : DateTime.now(),
+isRead: json['is_read'] == 1,
+);

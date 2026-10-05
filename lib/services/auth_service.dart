@@ -1,16 +1,12 @@
-import '../config/constants.dart';
 import '../models/user_model.dart';
+import 'api_client.dart';
 
 class AuthResult {
   final bool success;
   final UserModel? user;
   final String? message;
 
-  AuthResult({
-    required this.success,
-    this.user,
-    this.message,
-  });
+  AuthResult({required this.success, this.user, this.message});
 }
 
 class AuthService {
@@ -18,30 +14,21 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    // Simulate network latency
-    await Future.delayed(const Duration(milliseconds: 800));
+    final response = await ApiClient.post('login.php', {
+      'email': email.trim().toLowerCase(),
+      'password': password,
+    });
 
-    final normalizedEmail = email.trim().toLowerCase();
-    final expectedPassword = AppConstants.mockPasswords[normalizedEmail];
-
-    if (expectedPassword == null) {
+    if (response['success'] == true && response['user'] != null) {
       return AuthResult(
-        success: false,
-        message: 'No account found with this email',
+        success: true,
+        user: UserModel.fromJson(response['user']),
       );
     }
 
-    if (expectedPassword != password) {
-      return AuthResult(
-        success: false,
-        message: 'Invalid password',
-      );
-    }
-
-    final user = AppConstants.mockUsers[normalizedEmail];
     return AuthResult(
-      success: true,
-      user: user,
+      success: false,
+      message: response['message'] ?? 'Login failed',
     );
   }
 }

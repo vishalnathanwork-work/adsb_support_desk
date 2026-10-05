@@ -6,6 +6,7 @@ import '../../services/ticket_service.dart';
 import '../main_navigation.dart';
 import '../client/client_profile_tab.dart';
 import 'adsb_queue_screen.dart';
+import 'onsite_queue_screen.dart';
 
 class AdsbDashboard extends StatefulWidget {
   final UserModel user;
@@ -17,8 +18,8 @@ class AdsbDashboard extends StatefulWidget {
 }
 
 class _AdsbDashboardState extends State<AdsbDashboard> {
-  int _pendingCount = 0;
-  int _myActiveCount = 0;
+  int _verificationCount = 0;
+  int _onsiteCount = 0;
 
   @override
   void initState() {
@@ -27,13 +28,13 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
   }
 
   Future<void> _loadStats() async {
-    final all = await TicketService().getPendingTickets();
-    final pending = all.where((t) => t.assignedTo == null).length;
-    final mine = all.where((t) => t.assignedTo == widget.user.email).length;
+    final service = TicketService();
+    final pending = await service.getPendingTickets();
+    final onsite = await service.getInProgressTickets();
     if (!mounted) return;
     setState(() {
-      _pendingCount = pending;
-      _myActiveCount = mine;
+      _verificationCount = pending.length;
+      _onsiteCount = onsite.length;
     });
   }
 
@@ -47,15 +48,20 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
           icon: Icons.home_outlined,
           page: _AdsbHome(
             user: widget.user,
-            pendingCount: _pendingCount,
-            myActiveCount: _myActiveCount,
+            verificationCount: _verificationCount,
+            onsiteCount: _onsiteCount,
             onRefresh: _loadStats,
           ),
         ),
         NavTab(
-          label: 'Queue',
-          icon: Icons.list_alt_outlined,
+          label: 'Verify',
+          icon: Icons.support_agent,
           page: AdsbQueueScreen(user: widget.user),
+        ),
+        NavTab(
+          label: 'On-Site',
+          icon: Icons.location_on_outlined,
+          page: OnsiteQueueScreen(user: widget.user),
         ),
         NavTab(
           label: 'Profile',
@@ -78,14 +84,14 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
 
 class _AdsbHome extends StatelessWidget {
   final UserModel user;
-  final int pendingCount;
-  final int myActiveCount;
+  final int verificationCount;
+  final int onsiteCount;
   final VoidCallback onRefresh;
 
   const _AdsbHome({
     required this.user,
-    required this.pendingCount,
-    required this.myActiveCount,
+    required this.verificationCount,
+    required this.onsiteCount,
     required this.onRefresh,
   });
 
@@ -95,10 +101,7 @@ class _AdsbHome extends StatelessWidget {
       appBar: AppBar(
         title: const Text('ADSB Support Team'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: onRefresh,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
         ],
       ),
       body: SafeArea(
@@ -116,7 +119,7 @@ class _AdsbHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('First-Line Support',
+                  const Text('Support Team',
                       style: TextStyle(color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(user.name,
@@ -131,13 +134,13 @@ class _AdsbHome extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _statCard(
-                      'Unassigned', '$pendingCount', AppColors.warning),
+                  child: _statCard('To Verify', '$verificationCount',
+                      AppColors.warning),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _statCard(
-                      'My Active', '$myActiveCount', AppColors.accent),
+                      'On-Site', '$onsiteCount', AppColors.accent),
                 ),
               ],
             ),
@@ -149,12 +152,25 @@ class _AdsbHome extends StatelessWidget {
               context,
               Icons.support_agent,
               'Verification Queue',
-              'Tickets awaiting verification',
+              'Chat or call clients',
               AppColors.primary,
-              () => Navigator.push(
+                  () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AdsbQueueScreen(user: user),
+                ),
+              ),
+            ),
+            _actionTile(
+              context,
+              Icons.location_on_outlined,
+              'On-Site Jobs',
+              'Jobs assigned for physical visit',
+              AppColors.accent,
+                  () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => OnsiteQueueScreen(user: user),
                 ),
               ),
             ),
@@ -187,13 +203,13 @@ class _AdsbHome extends StatelessWidget {
   }
 
   Widget _actionTile(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String subtitle,
-    Color color,
-    VoidCallback onTap,
-  ) {
+      BuildContext context,
+      IconData icon,
+      String title,
+      String subtitle,
+      Color color,
+      VoidCallback onTap,
+      ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
