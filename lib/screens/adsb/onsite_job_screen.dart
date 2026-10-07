@@ -109,6 +109,43 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     Navigator.pop(context);
   }
 
+  Future<void> _claimJob() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Claim this job?'),
+        content: const Text(
+            'You will be assigned to this on-site job. The timer starts now.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Claim'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    await _service.claimOnsiteJob(
+      ticketId: widget.ticketId,
+      adsbEmail: widget.user.email,
+      adsbName: widget.user.name,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Job claimed. Good luck!'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -165,7 +202,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 const SizedBox(height: 10),
                 _row('Client', t.createdByName),
                 _row('Contact', '${t.contactName} — ${t.contactPhone}'),
-                _row('Site', '${t.siteName}'),
+                _row('Site', t.siteName),
                 _row('Address', t.siteLocation),
                 _row('Product', t.productType),
                 _row('Issue', t.productIssue),
@@ -183,6 +220,86 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               ),
             ],
             const SizedBox(height: 24),
+            // ─── PENDING ONSITE: show CLAIM button ───
+            if (t.status == 'pending_onsite') ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: AppColors.warning, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'This job has not been claimed yet. Claim it to start.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _claimJob,
+                  icon: const Icon(Icons.handyman_outlined),
+                  label: const Text('Claim Job',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.warning,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ]
+            // ─── IN PROGRESS: show MARK AS RESOLVED button ───
+            else if (t.status == 'in_progress') ...[
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _openResolutionForm,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Mark as Resolved',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ]
+            // ─── OTHER STATUSES ───
+            else ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text('Ticket is ${t.statusDisplay.toLowerCase()}.',
+                            style: const TextStyle(fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
             if (t.status == 'in_progress') ...[
               SizedBox(
                 height: 52,
@@ -354,7 +471,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _rootCause,
+              initialValue: _rootCause,
               decoration: const InputDecoration(hintText: 'Select root cause'),
               items: widget.rootCauses
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
@@ -374,7 +491,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _solution,
+              initialValue: _solution,
               decoration: const InputDecoration(hintText: 'Select solution'),
               items: widget.solutions
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))

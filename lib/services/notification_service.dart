@@ -1,24 +1,28 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/notification_model.dart';
-import 'api_client.dart';
 
 class NotificationService {
+  final _col = FirebaseFirestore.instance.collection('notifications');
+
   Future<List<AppNotification>> getMyNotifications(String userEmail) async {
-    final response = await ApiClient.get('notifications.php', query: {
-      'action': 'mine',
-      'email': userEmail,
-    });
+    try {
+      final snapshot = await _col
+          .where('user_email', isEqualTo: userEmail)
+          .get();
 
-    if (response['success'] == true && response['notifications'] != null) {
-      return (response['notifications'] as List)
-          .map((j) => AppNotification.fromJson(j))
+      final list = snapshot.docs
+          .map((doc) => AppNotification.fromJson({
+        ...doc.data(),
+        'id': doc.id,
+      }))
           .toList();
-    }
-    return [];
-  }
 
-  Future<int> getUnreadCount(String userEmail) async {
-    final all = await getMyNotifications(userEmail);
-    return all.where((n) => !n.isRead).length;
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (e) {
+      print('getMyNotifications error: $e');
+      return [];
+    }
   }
 
   Future<void> addNotification({
@@ -28,12 +32,26 @@ class NotificationService {
     required String body,
     required String type,
   }) async {
-    await ApiClient.post('notifications.php', {
-      'user_email': userId,
-      'ticket_id': ticketId,
-      'title': title,
-      'body': body,
-      'type': type,
-    });
+    try {
+      await _col.add({
+        'user_email': userId,
+        'ticket_id': ticketId,
+        'title': title,
+        'body': body,
+        'type': type,
+        'is_read': 0,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('addNotification error: $e');
+    }
+  }
+
+  Future<void> markAsRead(String id) async {
+    try {
+      await _col.doc(id).update({'is_read': 1});
+    } catch (e) {
+      print('markAsRead error: $e');
+    }
   }
 }

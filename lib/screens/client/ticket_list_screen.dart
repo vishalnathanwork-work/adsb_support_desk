@@ -50,6 +50,8 @@ class _TicketListScreenState extends State<TicketListScreen> {
         return _tickets.where((t) => t.isActive).toList();
       case 'resolved':
         return _tickets.where((t) => t.isResolved).toList();
+      case 'cancelled':
+        return _tickets.where((t) => t.status == 'cancelled').toList();
       default:
         return _tickets;
     }
@@ -110,14 +112,19 @@ class _TicketListScreenState extends State<TicketListScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Colors.white,
-      child: Row(
-        children: [
-          _filterChip('All', 'all'),
-          const SizedBox(width: 8),
-          _filterChip('Active', 'active'),
-          const SizedBox(width: 8),
-          _filterChip('Resolved', 'resolved'),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _filterChip('All', 'all'),
+            const SizedBox(width: 8),
+            _filterChip('Active', 'active'),
+            const SizedBox(width: 8),
+            _filterChip('Resolved', 'resolved'),
+            const SizedBox(width: 8),
+            _filterChip('Cancelled', 'cancelled'),
+          ],
+        ),
       ),
     );
   }

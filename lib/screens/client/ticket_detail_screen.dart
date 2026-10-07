@@ -5,6 +5,7 @@ import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/status_badge.dart';
+import '../adsb/adsb_chat_screen.dart';         // ← reuse the same chat screen
 
 class TicketDetailScreen extends StatefulWidget {
   final String ticketId;
@@ -38,6 +39,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       _ticket = t;
       _isLoading = false;
     });
+  }
+
+  Future<void> _openChat() async {
+    if (_ticket == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdsbChatScreen(
+          ticketId: _ticket!.id,
+          user: widget.user,
+          channel: 'ticket',
+        ),
+      ),
+    );
+    _load();
   }
 
   Future<void> _confirmResolution() async {
@@ -120,7 +136,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header card
+            // Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -167,28 +183,61 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             ),
             const SizedBox(height: 16),
 
+            // ─── CHAT BUTTON (visible during active handling) ───
+            if (t.isActive)
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _openChat,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text(
+                    'Chat with ADSB Team',
+                    style:
+                    TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+
             // Details
             _section('Ticket Details'),
             _infoTile('Site', '${t.siteName} — ${t.siteLocation}'),
             _infoTile('Contact', '${t.contactName} (${t.contactPhone})'),
             _infoTile('Reported', DateFormatter.full(t.createdAt)),
+            _infoTile(
+              'Time to Resolve',
+              Ticket.formatDuration(t.totalResolutionTime),
+            ),
+            if (t.adsbPickupAt != null && t.workCompletedAt != null)
+              _infoTile(
+                'On-Site Duration',
+                Ticket.formatDuration(t.onsiteWorkDuration),
+              ),
             if (t.description.isNotEmpty)
               _infoTile('Description', t.description),
 
             const SizedBox(height: 16),
 
-            // Resolution (if resolved)
+            // Resolution
             if (t.resolvedAt != null) ...[
               _section('Resolution'),
               _infoTile('Root Cause', t.rootCause ?? '—'),
               _infoTile('Solution', t.solutionApplied ?? '—'),
-              if (t.resolutionNotes != null && t.resolutionNotes!.isNotEmpty)
+              if (t.resolutionNotes != null &&
+                  t.resolutionNotes!.isNotEmpty)
                 _infoTile('Notes', t.resolutionNotes!),
               _infoTile('Resolved At', DateFormatter.full(t.resolvedAt!)),
               const SizedBox(height: 16),
             ],
 
-            // Actions
+            // Confirmation actions
             if (t.status == 'resolved') ...[
               SizedBox(
                 height: 50,
@@ -219,29 +268,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                ),
-              ),
-            ] else if (t.isActive) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, color: AppColors.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Your ticket is being handled. You will be notified of any updates.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primaryDark,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],

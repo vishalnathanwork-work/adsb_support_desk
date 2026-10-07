@@ -163,6 +163,30 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                                   fontSize: 12,
                                   color: AppColors.textSecondary)),
                           const SizedBox(height: 8),
+
+                          if (t.totalResolutionTime != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.timer_outlined,
+                                    size: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Resolved in ${Ticket.formatDuration(t.totalResolutionTime)}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 8),
+
                           Row(
                             children: [
                               const Icon(Icons.person_outline,

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../config/presets.dart';
 import '../../config/theme.dart';
+import '../../models/site_model.dart';
 import '../../models/user_model.dart';
 import '../../services/notification_service.dart';
+import '../../services/preset_service.dart';
+import '../../services/site_service.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/primary_button.dart';
 
@@ -19,24 +21,35 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _formKey = GlobalKey<FormState>();
   final _ticketService = TicketService();
   final _notificationService = NotificationService();
+  final _presetService = PresetService();
+  final _siteService = SiteService();
 
-  // Form fields
-  String? _selectedSiteId;
+  // ─── Selections ───
+  SiteModel? _selectedSite;
+  Lane? _selectedLane;
+  String? _selectedDirection; // 'entry' | 'exit'
   String? _selectedProductType;
   String? _selectedProductIssue;
+
+  // ─── Text controllers ───
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  final List<String> _imagePaths = []; // will be populated in a later sprint
+  // ─── Preset data ───
+  List<SiteModel> _sites = [];
+  List<String> _productTypes = [];
+  List<String> _productIssues = [];
+
+  bool _loading = true;
   bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
-    // Auto-fill contact from user
     _contactNameController.text = widget.user.name;
     _contactPhoneController.text = widget.user.phone ?? '';
+    _load();
   }
 
   @override
@@ -47,41 +60,77 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     super.dispose();
   }
 
+  Future<void> _load() async {
+    setState(() => _loading = true);
+
+    final sites = await _siteService.getSitesForUser(widget.user.siteIds);
+    final types = await _presetService.getProductTypes();
+    final issues = await _presetService.getProductIssues();
+
+    if (!mounted) return;
+    setState(() {
+      _sites = sites;
+      _productTypes = types;
+      _productIssues = issues;
+      _loading = false;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // SUBMIT
+  // ─────────────────────────────────────────────────────────
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedSiteId == null) {
+
+    if (_selectedSite == null) {
       _showError('Please select a site location');
+      return;
+    }
+    if (_selectedLane == null) {
+      _showError('Please select a parking label');
+      return;
+    }
+    if (_selectedDirection == null) {
+      _showError('Please choose Entry or Exit');
       return;
     }
 
     setState(() => _isSubmitting = true);
 
-    final site = Presets.sites.firstWhere((s) => s['id'] == _selectedSiteId);
-
-    final ticket = await _ticketService.createTicket(...);
+    final ticket = await _ticketService.createTicket(
+      createdBy: widget.user.email,
+      createdByName: widget.user.name,
+      createdByRole: widget.user.role,
+      siteId: _selectedSite!.id,
+      siteName: _selectedSite!.name,
+      siteLocation: _selectedSite!.address,
+      laneId: _selectedLane!.id,
+      laneName: _selectedLane!.name,
+      laneDirection: _selectedDirection!,
+      productType: _selectedProductType!,
+      productIssue: _selectedProductIssue!,
+      contactName: _contactNameController.text.trim(),
+      contactPhone: _contactPhoneController.text.trim(),
+      description: _descriptionController.text.trim(),
+      imageUrls: const [],
+    );
 
     if (ticket == null) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to create ticket. Please check your connection.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showError('Failed to create ticket. Check your connection.');
       return;
     }
 
-    // Notify the creator
     await _notificationService.addNotification(
       userId: widget.user.email,
-      ticketId: ticket.id,      // ✅ safe now
+      ticketId: ticket.id,
       title: 'Ticket Submitted',
       body: 'Your ticket ${ticket.id} has been received.',
       type: 'status_update',
     );
 
-    // Notify ADSB team (mock — in real app, this would go to the team)
     await _notificationService.addNotification(
       userId: 'adsb@adsb.com',
       ticketId: ticket.id,
@@ -93,7 +142,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     if (!mounted) return;
     setState(() => _isSubmitting = false);
 
-    // Show success and pop
+    // ─── Success dialog ───
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -109,7 +158,13 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Your ticket ID is:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            const Text(
+              'Your ticket ID is:',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
               ticket.id,
@@ -117,6 +172,26 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _summaryRow('Site', ticket.siteName),
+                  const SizedBox(height: 6),
+                  _summaryRow('Parking', ticket.laneName),
+                  const SizedBox(height: 6),
+                  _summaryRow('Direction', ticket.laneDirectionDisplay),
+                  const SizedBox(height: 6),
+                  _summaryRow('Product', ticket.productType),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -129,13 +204,40 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // close dialog
-              Navigator.pop(context, true); // return to list with refresh flag
+              Navigator.pop(context);
+              Navigator.pop(context, true);
             },
             child: const Text('OK'),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -145,32 +247,46 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Create Ticket')),
       body: SafeArea(
-        child: Form(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _sectionTitle('Site Location'),
+              // ─── Location section ───
+              _sectionTitle('Location'),
               _buildSiteDropdown(),
+              const SizedBox(height: 12),
+              _buildLaneDropdown(),
+              const SizedBox(height: 12),
+              _buildDirectionSelector(),
               const SizedBox(height: 20),
 
+              // ─── Product section ───
               _sectionTitle('Product Details'),
               _buildProductTypeDropdown(),
               const SizedBox(height: 12),
               _buildProductIssueDropdown(),
               const SizedBox(height: 20),
 
+              // ─── Contact section ───
               _sectionTitle('Contact Person'),
               _buildTextInput(
                 controller: _contactNameController,
                 label: 'Name',
                 icon: Icons.person_outline,
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                validator: (v) =>
+                v == null || v.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
               _buildTextInput(
@@ -178,16 +294,14 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 label: 'Phone',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                validator: (v) =>
+                v == null || v.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 20),
 
+              // ─── Description section ───
               _sectionTitle('Issue Description (Optional)'),
               _buildTextArea(),
-              const SizedBox(height: 20),
-
-              _sectionTitle('Image Upload (Coming Soon)'),
-              _buildImagePlaceholder(),
               const SizedBox(height: 32),
 
               PrimaryButton(
@@ -217,34 +331,217 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
+  // ═══════════════════════════════════════════════
+  // SITE DROPDOWN
+  // ═══════════════════════════════════════════════
+
   Widget _buildSiteDropdown() {
+    if (_sites.isEmpty) {
+      return _emptyMessage('No sites assigned to your account. Contact admin.');
+    }
+
     return DropdownButtonFormField<String>(
-      value: _selectedSiteId,
+      value: _selectedSite?.id,
+      isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select site',
-        prefixIcon: Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
-      ),
-      items: Presets.sites
-          .map(
-            (s) => DropdownMenuItem(
-          value: s['id'],
-          child: Text('${s['name']} — ${s['address']}'),
+        prefixIcon: Icon(
+          Icons.location_on_outlined,
+          color: AppColors.textSecondary,
         ),
-      )
-          .toList(),
-      onChanged: (v) => setState(() => _selectedSiteId = v),
+      ),
+      items: _sites.map((s) {
+        return DropdownMenuItem(
+          value: s.id,
+          child: Text(s.displayName, overflow: TextOverflow.ellipsis),
+        );
+      }).toList(),
+      onChanged: (id) {
+        if (id == null) return;
+        setState(() {
+          _selectedSite = _sites.firstWhere((s) => s.id == id);
+          _selectedLane = null;
+          _selectedDirection = null;
+        });
+      },
+      validator: (v) => v == null ? 'Required' : null,
     );
   }
 
+  // ═══════════════════════════════════════════════
+  // PARKING LABEL DROPDOWN (P1, P2, ...)
+  // ═══════════════════════════════════════════════
+
+  Widget _buildLaneDropdown() {
+    if (_selectedSite == null) {
+      return _disabledHint('Select a site first');
+    }
+
+    final lanes = _selectedSite!.lanes;
+    if (lanes.isEmpty) {
+      return _emptyMessage('This site has no parking labels configured.');
+    }
+
+    return DropdownButtonFormField<String>(
+      value: _selectedLane?.id,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        hintText: 'Select parking label',
+        prefixIcon: Icon(
+          Icons.local_parking_outlined,
+          color: AppColors.textSecondary,
+        ),
+      ),
+      items: lanes.map((lane) {
+        return DropdownMenuItem(
+          value: lane.id,
+          child: Text(lane.name),
+        );
+      }).toList(),
+      onChanged: (id) {
+        if (id == null) return;
+        setState(() {
+          _selectedLane = lanes.firstWhere((l) => l.id == id);
+          _selectedDirection = null; // reset direction when lane changes
+        });
+      },
+      validator: (v) => v == null ? 'Required' : null,
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // DIRECTION SELECTOR (Entry / Exit)
+  // ═══════════════════════════════════════════════
+
+  Widget _buildDirectionSelector() {
+    if (_selectedLane == null) {
+      return _disabledHint('Select a parking label first');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _selectedDirection == null
+              ? AppColors.divider
+              : AppColors.primary.withOpacity(0.4),
+          width: _selectedDirection == null ? 1 : 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.compare_arrows,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Is ${_selectedLane!.name} for Entry or Exit?',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _directionOption(
+                  label: 'Entry',
+                  value: 'entry',
+                  icon: Icons.login,
+                  color: AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _directionOption(
+                  label: 'Exit',
+                  value: 'exit',
+                  icon: Icons.logout,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _directionOption({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    final selected = _selectedDirection == value;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedDirection = value),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? color.withOpacity(0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? color : AppColors.divider,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: selected ? color : AppColors.textSecondary),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? color : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // PRODUCT DROPDOWNS
+  // ═══════════════════════════════════════════════
+
   Widget _buildProductTypeDropdown() {
+    if (_productTypes.isEmpty) {
+      return _emptyMessage('No product types loaded. Contact admin.');
+    }
     return DropdownButtonFormField<String>(
       value: _selectedProductType,
+      isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select product type',
-        prefixIcon: Icon(Icons.build_outlined, color: AppColors.textSecondary),
+        prefixIcon: Icon(
+          Icons.build_outlined,
+          color: AppColors.textSecondary,
+        ),
       ),
-      items: Presets.productTypes
-          .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+      items: _productTypes
+          .map((p) => DropdownMenuItem(
+        value: p,
+        child: Text(p, overflow: TextOverflow.ellipsis),
+      ))
           .toList(),
       onChanged: (v) => setState(() => _selectedProductType = v),
       validator: (v) => v == null ? 'Required' : null,
@@ -252,17 +549,77 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   Widget _buildProductIssueDropdown() {
+    if (_productIssues.isEmpty) {
+      return _emptyMessage('No product issues loaded. Contact admin.');
+    }
     return DropdownButtonFormField<String>(
       value: _selectedProductIssue,
+      isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select issue',
-        prefixIcon: Icon(Icons.report_problem_outlined, color: AppColors.textSecondary),
+        prefixIcon: Icon(
+          Icons.report_problem_outlined,
+          color: AppColors.textSecondary,
+        ),
       ),
-      items: Presets.productIssues
-          .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+      items: _productIssues
+          .map((p) => DropdownMenuItem(
+        value: p,
+        child: Text(p, overflow: TextOverflow.ellipsis),
+      ))
           .toList(),
       onChanged: (v) => setState(() => _selectedProductIssue = v),
       validator: (v) => v == null ? 'Required' : null,
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════
+
+  Widget _emptyMessage(String message) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.warning),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_outlined,
+            color: AppColors.warning,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: const TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _disabledHint(String message) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.divider.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.textSecondary),
+          const SizedBox(width: 10),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -290,28 +647,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       maxLines: 4,
       decoration: const InputDecoration(
         hintText: 'Describe the issue in detail (optional)',
-      ),
-    );
-  }
-
-  Widget _buildImagePlaceholder() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: const Column(
-        children: [
-          Icon(Icons.image_outlined, size: 40, color: AppColors.textSecondary),
-          SizedBox(height: 8),
-          Text(
-            'Image upload will be added in a future sprint',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }

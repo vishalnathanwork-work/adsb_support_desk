@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
+import '../../services/notification_listener.dart';
 import '../../services/session_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/ticket_service.dart';
 import '../main_navigation.dart';
 import '../client/client_profile_tab.dart';
 import 'admin_all_ticket_screen.dart';
 import 'admin_team_management_screen.dart';
 import 'admin_users_screen.dart';
-import 'admin_presets_screen.dart';
+import 'admin_preset_management_screen.dart';
 import 'data_inspector_screen.dart';
 import 'analytics_screen.dart';
+
 
 class AdminDashboard extends StatefulWidget {
   final UserModel user;
@@ -77,7 +80,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           page: ClientProfileTab(
             user: widget.user,
             onLogout: () async {
+              AppNotificationListener().stop();
               await SessionService().clear();
+              final authService = AuthService();
+              await authService.logout();
               if (context.mounted) {
                 Navigator.of(context)
                     .pushNamedAndRemoveUntil('/login', (r) => false);
@@ -245,10 +251,11 @@ class _AdminHome extends StatelessWidget {
                     () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const AdminPresetsScreen(),
+                    builder: (_) => const AdminPresetManagementScreen(),
                   ),
                 ),
               ),
+
               _actionTile(
                 context,
                 Icons.analytics_outlined,

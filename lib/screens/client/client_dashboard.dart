@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../services/notification_listener.dart';
 import '../../services/session_service.dart';
 import '../main_navigation.dart';
 import 'client_home_tab.dart';
@@ -55,6 +56,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
   }
 
   Future<void> _logout() async {
+    AppNotificationListener().stop();
     await _session.clear();
     if (mounted) {
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);

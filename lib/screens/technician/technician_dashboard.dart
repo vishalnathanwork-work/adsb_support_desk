@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
+import '../../services/notification_listener.dart';
 import '../../services/session_service.dart';
+import 'package:adsb_support_desk/services/auth_service.dart';
 import '../../services/ticket_service.dart';
 import '../main_navigation.dart';
 import '../client/client_profile_tab.dart';
@@ -18,6 +20,7 @@ class TechnicianDashboard extends StatefulWidget {
 }
 
 class _TechnicianDashboardState extends State<TechnicianDashboard> {
+  final _authService = AuthService();
   int _queueCount = 0;
   int _handledCount = 0;
 
@@ -80,7 +83,9 @@ class _TechnicianDashboardState extends State<TechnicianDashboard> {
           page: ClientProfileTab(
             user: widget.user,
             onLogout: () async {
+              AppNotificationListener().stop();
               await SessionService().clear();
+              await _authService.logout();
               if (context.mounted) {
                 Navigator.of(context)
                     .pushNamedAndRemoveUntil('/login', (r) => false);

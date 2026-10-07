@@ -23,6 +23,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _isLoading = true);
     final list = await _service.getAllTickets();
     if (!mounted) return;
     setState(() {
@@ -31,58 +32,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     });
   }
 
-  // ═══════════════ ANALYTICS CALCULATIONS ═══════════════
+  // ═══════════════════════════════════════════════
+  // COMPUTED METRICS
+  // ═══════════════════════════════════════════════
 
-  // 1. Total counts by status
-  Map<String, int> get _statusCounts {
-    final map = <String, int>{};
-    for (final t in _tickets) {
-      map[t.status] = (map[t.status] ?? 0) + 1;
-    }
-    return map;
-  }
+  int get totalTickets => _tickets.length;
 
-  // 2. Count by product type
-  Map<String, int> get _productCounts {
-    final map = <String, int>{};
-    for (final t in _tickets) {
-      map[t.productType] = (map[t.productType] ?? 0) + 1;
-    }
-    // Sort by count descending
-    final sorted = map.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return Map.fromEntries(sorted);
-  }
+  int get openTickets => _tickets
+      .where((t) =>
+  t.status == 'pending' ||
+      t.status == 'verified' ||
+      t.status == 'in_progress' ||
+      t.status == 'reopened')
+      .length;
 
-  // 3. Count by product issue
-  Map<String, int> get _issueCounts {
-    final map = <String, int>{};
-    for (final t in _tickets) {
-      map[t.productIssue] = (map[t.productIssue] ?? 0) + 1;
-    }
-    final sorted = map.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return Map.fromEntries(sorted);
-  }
+  int get resolvedTickets => _tickets
+      .where((t) => t.status == 'resolved' || t.status == 'closed')
+      .length;
 
-  // 4. Count by site
-  Map<String, int> get _siteCounts {
-    final map = <String, int>{};
-    for (final t in _tickets) {
-      map[t.siteName] = (map[t.siteName] ?? 0) + 1;
-    }
-    final sorted = map.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return Map.fromEntries(sorted);
-  }
+  double get resolutionRate =>
+      totalTickets == 0 ? 0 : (resolvedTickets / totalTickets) * 100;
 
-  // 5. Average resolution time (for resolved tickets)
-  Duration? get _avgResolutionTime {
+  Duration? get avgResolutionTime {
     final resolved = _tickets
         .where((t) => t.resolvedAt != null)
         .toList();
     if (resolved.isEmpty) return null;
-
     int totalSeconds = 0;
     for (final t in resolved) {
       totalSeconds += t.resolvedAt!.difference(t.createdAt).inSeconds;
@@ -90,51 +65,83 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return Duration(seconds: totalSeconds ~/ resolved.length);
   }
 
-  // 6. Tickets per day (last 7 days)
-  Map<String, int> get _last7Days {
-    final now = DateTime.now();
+  Map<String, int> get statusCounts {
     final map = <String, int>{};
-
-    for (int i = 6; i >= 0; i--) {
-      final day = DateTime(now.year, now.month, now.day - i);
-      final key = DateFormat('EEE dd').format(day);
-      map[key] = 0;
-    }
-
     for (final t in _tickets) {
-      final diff = now.difference(t.createdAt).inDays;
-      if (diff >= 0 && diff <= 6) {
-        final day = DateTime(now.year, now.month, now.day - diff);
-        final key = DateFormat('EEE dd').format(day);
-        map[key] = (map[key] ?? 0) + 1;
-      }
+      map[t.status] = (map[t.status] ?? 0) + 1;
     }
     return map;
   }
 
-  // 7. Resolution rate
-  double get _resolutionRate {
-    if (_tickets.isEmpty) return 0;
-    final resolved = _tickets
-        .where((t) => t.status == 'resolved' || t.status == 'closed')
-        .length;
-    return (resolved / _tickets.length) * 100;
+  Map<String, int> get productIssueCounts {
+    final map = <String, int>{};
+    for (final t in _tickets) {
+      map[t.productIssue] = (map[t.productIssue] ?? 0) + 1;
+    }
+    final sorted = _sortDescending(map);
+    final top5 = sorted.entries.take(5);
+    return Map.fromEntries(top5);
   }
 
-  // 8. Common root causes (from resolved tickets)
-  Map<String, int> get _rootCauseCounts {
+  Map<String, int> get productTypeCounts {
+    final map = <String, int>{};
+    for (final t in _tickets) {
+      map[t.productType] = (map[t.productType] ?? 0) + 1;
+    }
+    return _sortDescending(map);
+  }
+
+  Map<String, int> get siteCounts {
+    final map = <String, int>{};
+    for (final t in _tickets) {
+      map[t.siteName] = (map[t.siteName] ?? 0) + 1;
+    }
+    return _sortDescending(map);
+  }
+
+  Map<String, int> get rootCauseCounts {
     final map = <String, int>{};
     for (final t in _tickets) {
       if (t.rootCause != null && t.rootCause!.isNotEmpty) {
         map[t.rootCause!] = (map[t.rootCause!] ?? 0) + 1;
       }
     }
-    final sorted = map.entries.toList()
+    return _sortDescending(map);
+  }
+
+  Map<String, int> get last7Days {
+    final now = DateTime.now();
+    final map = <String, int>{};
+    for (int i = 6; i >= 0; i--) {
+      final day = DateTime(now.year, now.month, now.day - i);
+      map[DateFormat('EEE').format(day)] = 0;
+    }
+    for (final t in _tickets) {
+      final diff = now.difference(t.createdAt).inDays;
+      if (diff >= 0 && diff <= 6) {
+        final day = DateTime(now.year, now.month, now.day - diff);
+        final key = DateFormat('EEE').format(day);
+        map[key] = (map[key] ?? 0) + 1;
+      }
+    }
+    return map;
+  }
+
+  Map<String, int> _sortDescending(Map<String, int> input) {
+    final sorted = input.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     return Map.fromEntries(sorted);
   }
 
-  // ═══════════════ UI ═══════════════
+  String _formatDuration(Duration d) {
+    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
+    return '${d.inMinutes}m';
+  }
+
+  // ═══════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -154,38 +161,41 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _kpiSection(),
-            const SizedBox(height: 24),
+            _kpiRow(),
+            const SizedBox(height: 16),
             _resolutionRateCard(),
-            const SizedBox(height: 24),
-            _avgResolutionCard(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            _avgTimeCard(),
+            const SizedBox(height: 16),
             _statusBreakdownCard(),
-            const SizedBox(height: 24),
-            _barChartCard(
-              'Top Product Issues',
-              _issueCounts,
-              AppColors.primary,
-            ),
-            const SizedBox(height: 24),
-            _barChartCard(
-              'Issues by Product Type',
-              _productCounts,
-              AppColors.accent,
-            ),
-            const SizedBox(height: 24),
-            _barChartCard(
-              'Issues by Site',
-              _siteCounts,
-              AppColors.warning,
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            if (productIssueCounts.isNotEmpty)
+              _barChartCard(
+                'Top Product Issues',
+                productIssueCounts,
+                AppColors.warning,
+              ),
+            const SizedBox(height: 16),
+            if (productTypeCounts.isNotEmpty)
+              _barChartCard(
+                'Issues by Product Type',
+                productTypeCounts,
+                AppColors.primary,
+              ),
+            const SizedBox(height: 16),
+            if (siteCounts.isNotEmpty)
+              _barChartCard(
+                'Issues by Site',
+                siteCounts,
+                AppColors.accent,
+              ),
+            const SizedBox(height: 16),
             _trendCard(),
-            if (_rootCauseCounts.isNotEmpty) ...[
-              const SizedBox(height: 24),
+            if (rootCauseCounts.isNotEmpty) ...[
+              const SizedBox(height: 16),
               _barChartCard(
                 'Common Root Causes',
-                _rootCauseCounts,
+                rootCauseCounts,
                 AppColors.success,
               ),
             ],
@@ -197,12 +207,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _emptyState() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(Icons.analytics_outlined,
                 size: 72, color: AppColors.textSecondary),
             SizedBox(height: 20),
@@ -223,31 +233,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  // KPI row
-  Widget _kpiSection() {
-    final total = _tickets.length;
-    final open = _tickets
-        .where((t) =>
-    t.status == 'pending' ||
-        t.status == 'verified' ||
-        t.status == 'in_progress')
-        .length;
-    final resolved = _tickets
-        .where((t) => t.status == 'resolved' || t.status == 'closed')
-        .length;
+  // ═══════════════════════════════════════════════
+  // CARDS
+  // ═══════════════════════════════════════════════
 
+  Widget _kpiRow() {
     return Row(
       children: [
         Expanded(
-            child: _kpi('Total', '$total', Icons.list_alt_outlined,
+            child: _kpi('Total', '$totalTickets', Icons.list_alt_outlined,
                 AppColors.primary)),
         const SizedBox(width: 10),
         Expanded(
-            child: _kpi('Open', '$open', Icons.pending_outlined,
+            child: _kpi('Open', '$openTickets', Icons.pending_outlined,
                 AppColors.warning)),
         const SizedBox(width: 10),
         Expanded(
-            child: _kpi('Resolved', '$resolved',
+            child: _kpi('Resolved', '$resolvedTickets',
                 Icons.check_circle_outline, AppColors.success)),
       ],
     );
@@ -279,7 +281,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _resolutionRateCard() {
-    final rate = _resolutionRate;
+    final rate = resolutionRate;
     return _card(
       title: 'Resolution Rate',
       child: Row(
@@ -288,20 +290,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${rate.toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.success,
-                  ),
-                ),
+                Text('${rate.toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.success)),
                 const SizedBox(height: 4),
-                Text(
-                  'of all tickets resolved or closed',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
+                Text('$resolvedTickets of $totalTickets tickets resolved',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
           ),
@@ -315,16 +312,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   value: rate / 100,
                   strokeWidth: 8,
                   backgroundColor: AppColors.divider,
-                  valueColor: const AlwaysStoppedAnimation(
-                      AppColors.success),
+                  valueColor:
+                  const AlwaysStoppedAnimation(AppColors.success),
                 ),
-                Text(
-                  '${rate.toInt()}%',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('${rate.toInt()}%',
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -333,33 +326,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _avgResolutionCard() {
-    final avg = _avgResolutionTime;
+  Widget _avgTimeCard() {
+    final avg = avgResolutionTime;
     return _card(
       title: 'Average Resolution Time',
       child: Row(
         children: [
-          const Icon(Icons.timer_outlined,
-              size: 40, color: AppColors.accent),
+          const Icon(Icons.timer_outlined, size: 40, color: AppColors.accent),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  avg == null ? '—' : _formatDuration(avg),
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.accent,
-                  ),
-                ),
+                Text(avg == null ? '—' : _formatDuration(avg),
+                    style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.accent)),
                 const SizedBox(height: 4),
-                const Text(
-                  'from ticket created to resolved',
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
+                const Text('from ticket created to resolved',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
           ),
@@ -368,21 +355,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  String _formatDuration(Duration d) {
-    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
-    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
-    return '${d.inMinutes}m';
-  }
-
   Widget _statusBreakdownCard() {
-    final counts = _statusCounts;
+    final counts = statusCounts;
     if (counts.isEmpty) return const SizedBox();
 
     return _card(
       title: 'Status Breakdown',
       child: Column(
         children: counts.entries.map((e) {
-          final percentage = (e.value / _tickets.length) * 100;
+          final pct = (e.value / totalTickets) * 100;
           final color = _statusColor(e.key);
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -392,27 +373,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        _statusLabel(e.key),
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w500),
-                      ),
+                      child: Text(_statusLabel(e.key),
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w500)),
                     ),
-                    Text(
-                      '${e.value} (${percentage.toStringAsFixed(0)}%)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
+                    Text('${e.value} (${pct.toStringAsFixed(0)}%)',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: color)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: percentage / 100,
+                    value: pct / 100,
                     minHeight: 8,
                     backgroundColor: AppColors.divider,
                     valueColor: AlwaysStoppedAnimation(color),
@@ -426,50 +402,43 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _barChartCard(
-      String title, Map<String, int> data, Color color) {
+  Widget _barChartCard(String title, Map<String, int> data, Color color) {
     if (data.isEmpty) return const SizedBox();
 
-    final maxValue = data.values.reduce((a, b) => a > b ? a : b);
+    final maxVal = data.values.reduce((a, b) => a > b ? a : b);
     final total = data.values.reduce((a, b) => a + b);
 
     return _card(
       title: title,
       child: Column(
         children: data.entries.take(8).map((e) {
-          final percentage = (e.value / maxValue) * 100;
-          final overall = (e.value / total) * 100;
+          final barPct = (e.value / maxVal) * 100;
+          final overallPct = (e.value / total) * 100;
           return Padding(
-            padding: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.only(bottom: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        e.key,
-                        style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w500),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(e.key,
+                          style: const TextStyle(fontSize: 12),
+                          overflow: TextOverflow.ellipsis),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      '${e.value} (${overall.toStringAsFixed(0)}%)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
+                    Text('${e.value} (${overallPct.toStringAsFixed(0)}%)',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: color)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: percentage / 100,
+                    value: barPct / 100,
                     minHeight: 8,
                     backgroundColor: AppColors.divider,
                     valueColor: AlwaysStoppedAnimation(color),
@@ -484,10 +453,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _trendCard() {
-    final data = _last7Days;
-    final maxValue =
+    final data = last7Days;
+    final maxVal =
     data.values.isEmpty ? 1 : data.values.reduce((a, b) => a > b ? a : b);
-    if (maxValue == 0) return const SizedBox();
 
     return _card(
       title: 'Last 7 Days (Tickets Created)',
@@ -496,16 +464,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: data.entries.map((e) {
-            final height = (e.value / maxValue) * 100;
+            final height = (e.value / maxVal) * 100;
             return Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text(
-                    '${e.value}',
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
+                  Text('${e.value}',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -519,12 +485,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    e.key,
-                    style: const TextStyle(
-                        fontSize: 9, color: AppColors.textSecondary),
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(e.key,
+                      style: const TextStyle(
+                          fontSize: 9, color: AppColors.textSecondary)),
                 ],
               ),
             );
@@ -534,7 +497,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  // Helpers
   Widget _card({required String title, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -546,14 +508,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 14),
           child,
         ],

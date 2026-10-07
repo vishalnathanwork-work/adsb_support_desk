@@ -30,10 +30,23 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
-    final list = await _service.getInProgressTickets();
+
+    // Load BOTH pending_onsite (unclaimed) and in_progress (claimed)
+    final pendingOnsite = await _service.getPendingOnsiteTickets();
+    final inProgress = await _service.getInProgressTickets();
+
+    final combined = [...pendingOnsite, ...inProgress];
+    combined.sort((a, b) {
+      // Unclaimed first, then oldest first
+      final aUnclaimed = a.status == 'pending_onsite';
+      final bUnclaimed = b.status == 'pending_onsite';
+      if (aUnclaimed != bUnclaimed) return aUnclaimed ? -1 : 1;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+
     if (!mounted) return;
     setState(() {
-      _tickets = list;
+      _tickets = combined;
       _isLoading = false;
     });
   }
@@ -82,7 +95,12 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.divider),
+                  border: Border.all(
+                    color: t.status == 'pending_onsite'
+                        ? AppColors.warning.withOpacity(0.4)
+                        : AppColors.divider,
+                    width: t.status == 'pending_onsite' ? 2 : 1,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,42 +108,80 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(t.id,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary)),
+                          child: Text(
+                            t.id,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
                         ),
+                        if (t.status == 'pending_onsite')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            margin:
+                            const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.warning
+                                  .withOpacity(0.15),
+                              borderRadius:
+                              BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'UNCLAIMED',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                          ),
                         StatusBadge(status: t.status),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(t.productType,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
+                    Text(
+                      t.productType,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(t.productIssue,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary)),
+                    Text(
+                      t.productIssue,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_outlined,
-                            size: 14,
-                            color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
-                          child: Text(t.siteName,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary)),
-                        ),
-                        Text(DateFormatter.relative(t.updatedAt),
+                          child: Text(
+                            '${t.siteName} — ${t.laneName}',
                             style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary)),
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          DateFormatter.relative(t.updatedAt),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
                   ],

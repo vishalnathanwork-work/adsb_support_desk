@@ -3,6 +3,8 @@ import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
+import '../../services/push_notification_service.dart';
+import '../../services/notification_listener.dart';
 import '../../utils/role_router.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/primary_button.dart';
@@ -16,10 +18,13 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
   final _authService = AuthService();
   final _session = SessionService();
+  final _pushNotificationService = PushNotificationService();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -32,34 +37,82 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Validate form
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
-    final result = await _authService.login(
-      email: _emailController.text,
-      password: _passwordController.text,
-    );
+    try {
+      // ----------------------------------------------------------
+      // LOGIN
+      // ----------------------------------------------------------
+      final result = await _authService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-    if (!mounted) return;
-
-    if (result.success && result.user != null) {
-      if (_rememberMe) {
-        await _session.saveUser(result.user!);
-      }
       if (!mounted) return;
-      RoleRouter.goToDashboard(context, result.user!);
-    } else {
-      setState(() => _isLoading = false);
+
+      // ----------------------------------------------------------
+      // LOGIN SUCCESS
+      // ----------------------------------------------------------
+      if (result.success && result.user != null) {
+        if (_rememberMe) {
+          await _session.saveUser(result.user!);
+        }
+
+        // Start notifications
+        await _pushNotificationService.initialize(result.user!.email);
+        AppNotificationListener().start(result.user!.email);
+
+        if (!mounted) return;
+        RoleRouter.goToDashboard(context, result.user!);
+      } else {
+        // --------------------------------------------------------
+        // LOGIN FAILED
+        // --------------------------------------------------------
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message ?? 'Login failed'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      // ----------------------------------------------------------
+      // UNEXPECTED ERROR
+      // ----------------------------------------------------------
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.message ?? 'Login failed'),
+          content: Text('Something went wrong: $e'),
           backgroundColor: AppColors.error,
         ),
       );
     }
   }
+
+  // ============================================================
+  // DEMO CREDENTIALS
+  // ============================================================
 
   void _showDemoCredentials() {
     showDialog(
@@ -81,7 +134,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(context);
+            },
             child: const Text('Close'),
           ),
         ],
@@ -89,18 +144,27 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 32,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 32),
+
+                // ADSB LOGO
                 Center(
                   child: Container(
                     width: 90,
@@ -122,7 +186,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 20),
+
+                // APP NAME
                 Text(
                   AppConstants.appName,
                   textAlign: TextAlign.center,
@@ -132,7 +199,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppColors.textPrimary,
                   ),
                 ),
+
                 const SizedBox(height: 6),
+
                 const Text(
                   'Sign in to continue',
                   textAlign: TextAlign.center,
@@ -141,7 +210,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppColors.textSecondary,
                   ),
                 ),
+
                 const SizedBox(height: 40),
+
+                // EMAIL
                 CustomTextField(
                   label: 'Email',
                   hint: 'you@adsb.com',
@@ -158,7 +230,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
+
                 const SizedBox(height: 18),
+
+                // PASSWORD
                 CustomTextField(
                   label: 'Password',
                   hint: 'Enter your password',
@@ -173,7 +248,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: AppColors.textSecondary,
                     ),
                     onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
                     },
                   ),
                   validator: (value) {
@@ -186,7 +263,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
+
                 const SizedBox(height: 12),
+
+                // REMEMBER ME + FORGOT PASSWORD
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -195,14 +275,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         Checkbox(
                           value: _rememberMe,
                           activeColor: AppColors.primary,
-                          onChanged: (v) {
-                            setState(() => _rememberMe = v ?? false);
+                          onChanged: (value) {
+                            setState(() {
+                              _rememberMe = value ?? false;
+                            });
                           },
                         ),
-                        const Text('Remember me',
-                            style: TextStyle(fontSize: 13)),
+                        const Text(
+                          'Remember me',
+                          style: TextStyle(fontSize: 13),
+                        ),
                       ],
                     ),
+
                     TextButton(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -211,24 +296,35 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         );
                       },
-                      child: const Text('Forgot password?',
-                          style: TextStyle(fontSize: 13)),
+                      child: const Text(
+                        'Forgot password?',
+                        style: TextStyle(fontSize: 13),
+                      ),
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 20),
+
+                // SIGN IN BUTTON
                 PrimaryButton(
                   label: 'Sign In',
                   onPressed: _handleLogin,
                   isLoading: _isLoading,
                 ),
+
                 const SizedBox(height: 24),
+
+                // DEMO ACCOUNTS
                 TextButton.icon(
                   onPressed: _showDemoCredentials,
                   icon: const Icon(Icons.info_outline, size: 18),
                   label: const Text('View demo accounts'),
                 ),
+
                 const SizedBox(height: 16),
+
+                // VERSION
                 const Center(
                   child: Text(
                     'Version 1.0.0 — ADSB Support Desk',
@@ -247,10 +343,15 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// ================================================================
+// DEMO ACCOUNT ROW
+// ================================================================
+
 class _DemoRow extends StatelessWidget {
   final String role;
   final String email;
   final String password;
+
   const _DemoRow(this.role, this.email, this.password);
 
   @override
@@ -260,11 +361,20 @@ class _DemoRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(role,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 13)),
-          Text('$email / $password',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(
+            role,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+          Text(
+            '$email / $password',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );

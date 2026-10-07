@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
+import '../../services/user_service.dart';
+import '../../widgets/empty_state.dart';
+import 'widgets/user_form_sheet.dart';
+import 'widgets/user_actions_sheet.dart';
 
 class AdminTeamManagementScreen extends StatefulWidget {
   final UserModel user;
@@ -14,21 +18,118 @@ class AdminTeamManagementScreen extends StatefulWidget {
 
 class _AdminTeamManagementScreenState
     extends State<AdminTeamManagementScreen> {
-  // In a real app, these come from backend
-  final List<Map<String, String>> _members = [
-    {
-      'name': 'ADSB Support Agent',
-      'email': 'adsb@adsb.com',
-      'role': 'ADSB Support',
-      'phone': '+60 12-345 6791',
-    },
-    {
-      'name': 'TT Advisor',
-      'email': 'tech@adsb.com',
-      'role': 'Technical Advisor',
-      'phone': '+60 12-345 6792',
-    },
-  ];
+  final _service = UserService();
+  List<Map<String, dynamic>> _all = [];
+  List<Map<String, dynamic>> _filtered = [];
+  bool _isLoading = true;
+  String _filterRole = 'all';
+  final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _isLoading = true);
+    final list = await _service.getInternalTeam();
+    if (!mounted) return;
+    setState(() {
+      _all = list;
+      _isLoading = false;
+      _applyFilters();
+    });
+  }
+
+  void _applyFilters() {
+    final q = _searchController.text.trim().toLowerCase();
+    _filtered = _all.where((u) {
+      final roleMatch = _filterRole == 'all' || u['role'] == _filterRole;
+      final name = (u['name'] ?? '').toString().toLowerCase();
+      final email = (u['email'] ?? '').toString().toLowerCase();
+      final searchMatch =
+          q.isEmpty || name.contains(q) || email.contains(q);
+      return roleMatch && searchMatch;
+    }).toList();
+  }
+
+  Future<void> _showAddInfo() async {
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Add Team Member'),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'During development, team members are created manually:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 12),
+              Text('1. Open Firebase Console'),
+              Text('2. Authentication → Add user'),
+              Text('3. Copy the new UID'),
+              Text('4. Firestore → users → Add document'),
+              Text('5. Paste UID as document ID'),
+              Text('6. Set role: adsb / technician / admin'),
+              SizedBox(height: 12),
+              Text(
+                'Once Cloud Functions are enabled, this button will create members directly.',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openEditForm(Map<String, dynamic> userData) async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => UserFormSheet(
+        allowedRoles: const ['adsb', 'technician', 'admin'],
+        existingUser: userData,
+      ),
+    );
+    if (updated == true) _load();
+  }
+
+  Future<void> _openActions(Map<String, dynamic> userData) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => UserActionsSheet(
+        userData: userData,
+        currentAdminEmail: widget.user.email,
+        isInternalTeam: true,
+      ),
+    );
+    if (changed == true) _load();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,106 +137,226 @@ class _AdminTeamManagementScreenState
       appBar: AppBar(
         title: const Text('Team Management'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Add member coming soon')),
-              );
-            },
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddInfo,
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.group_add),
+        label: const Text('Add Member'),
+      ),
+      body: Column(
         children: [
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            color: AppColors.primary.withOpacity(0.06),
             child: const Row(
               children: [
-                Icon(Icons.info_outline, color: AppColors.primary),
-                SizedBox(width: 12),
+                Icon(Icons.info_outline, color: AppColors.primary, size: 18),
+                SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Internal teams: ADSB Support (first line) and TT (Technical Advisor). Clients never see these distinctions.',
+                    'Internal teams: ADSB Support, TT (Technical Advisor), and Admins.',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          ..._members.map(_memberCard),
+          _buildFilterBar(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filtered.isEmpty
+                ? const EmptyState(
+              icon: Icons.groups_outlined,
+              title: 'No team members',
+              subtitle: 'Add your first team member',
+            )
+                : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                itemCount: _filtered.length,
+                itemBuilder: (context, i) =>
+                    _memberCard(_filtered[i]),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _memberCard(Map<String, String> m) {
+  Widget _buildFilterBar() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
+      color: Colors.white,
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(_applyFilters),
+            decoration: const InputDecoration(
+              hintText: 'Search team members...',
+              prefixIcon: Icon(Icons.search),
+              filled: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _chip('All', 'all'),
+                _chip('ADSB Support', 'adsb'),
+                _chip('Tech Advisor', 'technician'),
+                _chip('Admin', 'admin'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, String value) {
+    final selected = _filterRole == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        selected: selected,
+        onSelected: (_) {
+          setState(() {
+            _filterRole = value;
+            _applyFilters();
+          });
+        },
+        selectedColor: AppColors.primary.withOpacity(0.15),
+      ),
+    );
+  }
+
+  Widget _memberCard(Map<String, dynamic> m) {
+    final isActive = m['is_active'] ?? true;
+    final role = m['role'] ?? 'adsb';
+    final color = _roleColor(role);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.divider),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: AppColors.primary.withOpacity(0.15),
-            child: Text(
-              m['name']!.substring(0, 1),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+      child: ListTile(
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        leading: CircleAvatar(
+          backgroundColor:
+          isActive ? color.withOpacity(0.15) : AppColors.divider,
+          child: Text(
+            (m['name'] ?? '?').toString().substring(0, 1).toUpperCase(),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isActive ? color : AppColors.textSecondary,
+            ),
+          ),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                m['name'] ?? '—',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isActive
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(m['name']!,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(m['email']!,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
-                const SizedBox(height: 2),
-                Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(m['role']!,
-                      style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600)),
+            if (!isActive)
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined,
-                size: 20, color: AppColors.textSecondary),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Edit coming soon')),
-              );
-            },
-          ),
-        ],
+                child: const Text(
+                  'INACTIVE',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 3),
+            Text(m['email'] ?? '—',
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            _badge(_roleLabel(role), color),
+          ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+          onPressed: () => _openActions(m),
+        ),
+        onTap: () => _openEditForm(m),
       ),
     );
+  }
+
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+            fontSize: 10, color: color, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'adsb':
+        return 'ADSB Support';
+      case 'technician':
+        return 'Technical Advisor';
+      case 'admin':
+        return 'Administrator';
+      default:
+        return role;
+    }
+  }
+
+  Color _roleColor(String role) {
+    switch (role) {
+      case 'adsb':
+        return AppColors.primary;
+      case 'technician':
+        return const Color(0xFF5E35B1);
+      case 'admin':
+        return AppColors.textPrimary;
+      default:
+        return AppColors.textSecondary;
+    }
   }
 }

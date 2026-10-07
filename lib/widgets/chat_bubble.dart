@@ -11,6 +11,86 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.isSystem) return _systemCard();
+    return _userBubble();
+  }
+
+  // ─────────────────────────────────────────
+  // SYSTEM SUMMARY CARD
+  // ─────────────────────────────────────────
+
+  Widget _systemCard() {
+    final isInternal = message.channel == 'internal';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isInternal
+              ? const Color(0xFF5E35B1).withOpacity(0.06)
+              : AppColors.background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isInternal
+                ? const Color(0xFF5E35B1).withOpacity(0.3)
+                : AppColors.divider,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isInternal ? Icons.lock_outline : Icons.info_outline,
+                  size: 16,
+                  color: isInternal
+                      ? const Color(0xFF5E35B1)
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isInternal ? 'Internal Ticket Details' : 'Ticket Details',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isInternal
+                        ? const Color(0xFF5E35B1)
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  DateFormatter.relative(message.sentAt),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              message.message,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────
+  // USER MESSAGE
+  // ─────────────────────────────────────────
+
+  Widget _userBubble() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -23,7 +103,9 @@ class ChatBubble extends StatelessWidget {
               radius: 16,
               backgroundColor: AppColors.primary.withOpacity(0.15),
               child: Text(
-                message.senderName.substring(0, 1).toUpperCase(),
+                message.senderName.isEmpty
+                    ? '?'
+                    : message.senderName.substring(0, 1).toUpperCase(),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -38,18 +120,7 @@ class ChatBubble extends StatelessWidget {
               crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (!isMe)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 3),
-                    child: Text(
-                      message.senderName,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
+                if (!isMe) _senderHeader(),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
@@ -86,8 +157,72 @@ class ChatBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (isMe) const SizedBox(width: 4),
         ],
+      ),
+    );
+  }
+
+  Widget _senderHeader() {
+    final roleBadge = _roleBadge();
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message.senderName,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          if (roleBadge != null) ...[
+            const SizedBox(width: 4),
+            roleBadge,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget? _roleBadge() {
+    Color color;
+    String label;
+
+    switch (message.senderRole) {
+      case 'adsb':
+        color = AppColors.primary;
+        label = 'ADSB';
+        break;
+      case 'technician':
+        color = const Color(0xFF5E35B1);
+        label = 'TT';
+        break;
+      case 'admin':
+        color = AppColors.textPrimary;
+        label = 'ADMIN';
+        break;
+      case 'client':
+      case 'operator':
+        return null; // no badge for external users
+      default:
+        return null;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }
