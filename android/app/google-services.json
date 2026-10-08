@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "519672171004",
+    "project_id": "adsb-support-desk",
+    "storage_bucket": "adsb-support-desk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:519672171004:android:656ed888338909fdd7ca79",
+        "android_client_info": {
+          "package_name": "com.example.adsb_support_desk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwImJHImHzyO2YpYpcmFmt_eWnXEpnzbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

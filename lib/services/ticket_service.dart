@@ -25,8 +25,7 @@ class TicketService {
 
   Future<List<Ticket>> getMyTickets(String email) async {
     try {
-      final snapshot =
-      await _col.where('created_by', isEqualTo: email).get();
+      final snapshot = await _col.where('created_by', isEqualTo: email).get();
       final list = snapshot.docs
           .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
@@ -144,6 +143,10 @@ class TicketService {
         'auto_closed_at': null,
         'no_show_at': null,
         'escalated_at': null,
+        'escalation_reason': null,
+        'tt_advisor_email': null,
+        'tt_advisor_name': null,
+        'tt_review_started_at': null,
       });
 
       await Future.delayed(const Duration(milliseconds: 500));
@@ -197,9 +200,26 @@ class TicketService {
     });
   }
 
-  Future<void> logEscalated(String ticketId) async {
+  /// Auto-escalate: called when ADSB sends their first internal chat
+  /// message. Only escalates if the ticket is still 'pending'.
+  Future<void> autoEscalateIfNeeded({
+    required String ticketId,
+    required String reason,
+    required String adsbEmail,
+    required String adsbName,
+  }) async {
+    final ticket = await getTicketById(ticketId);
+    if (ticket == null) return;
+    if (ticket.status != 'pending') return;
+
     await updateTicketFields(ticketId, {
+      'status': 'verified',
+      'assigned_to': adsbEmail,
+      'assigned_to_name': adsbName,
+      'escalation_reason': reason,
+      'verified_at': FieldValue.serverTimestamp(),
       'escalated_at': FieldValue.serverTimestamp(),
+      'tt_notified_at': FieldValue.serverTimestamp(),
     });
   }
 
@@ -214,18 +234,11 @@ class TicketService {
     });
   }
 
-  Future<void> provideAdviceAndAssign({
-    required String ticketId,
-    required String advice,
-    required String ttAgentEmail,
-    required String ttAgentName,
-  }) async {
+  /// Move a verified ticket into the on-site queue.
+  /// Called by ADSB after TT has advised and physical visit is needed.
+  Future<void> sendToOnsiteQueue(String ticketId) async {
     await updateTicketFields(ticketId, {
       'status': 'pending_onsite',
-      'root_cause': advice,
-      'solution_applied': 'Pending on-site work',
-      'assigned_to': ttAgentEmail,
-      'assigned_to_name': ttAgentName,
       'tt_solution_provided_at': FieldValue.serverTimestamp(),
     });
   }
@@ -270,6 +283,18 @@ class TicketService {
     }
 
     await updateTicketFields(ticketId, fields);
+  }
+
+  Future<void> markTTReviewed({
+    required String ticketId,
+    required String ttEmail,
+    required String ttName,
+  }) async {
+    await updateTicketFields(ticketId, {
+      'tt_advisor_email': ttEmail,
+      'tt_advisor_name': ttName,
+      'tt_solution_provided_at': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> confirmResolution(String ticketId) async {

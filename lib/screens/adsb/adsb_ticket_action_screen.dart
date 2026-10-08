@@ -94,12 +94,23 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     _load();
   }
 
+  Future<void> _callTTAdvisor() async {
+    const ttPhone = '+60 12-345 6792';
+    final uri = Uri.parse('tel:$ttPhone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot call TT advisor')),
+      );
+    }
+  }
+
   // ─────────────────────────────────────────
   // OUTCOMES
   // ─────────────────────────────────────────
 
-  /// Option A — Resolve Remotely.
-  /// Works whether or not TT was consulted.
   Future<void> _resolveRemotely() async {
     final ok = await ActionDialog.confirm(
       context: context,
@@ -137,50 +148,34 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     Navigator.pop(context);
   }
 
-  /// Option B — Request On-Site.
-  /// Sends ticket to TT review queue for assignment.
-  Future<void> _requestOnsite() async {
-    final reason = await ActionDialog.input(
+  Future<void> _sendToOnsite() async {
+    if (_ticket == null) return;
+
+    final ok = await ActionDialog.confirm(
       context: context,
-      title: 'Request On-Site Visit',
-      hint:
-      'Summary for TT: what was tried, what failed, why on-site is needed',
-      confirmLabel: 'Send to TT',
-      maxLines: 4,
+      title: 'Send to On-Site Team?',
+      message:
+      'The ADSB on-site queue will show this ticket as UNCLAIMED. '
+          'A technician will claim and attend the site.',
+      confirmLabel: 'Send to On-Site',
+      confirmColor: AppColors.warning,
     );
-    if (reason == null) return;
+    if (!ok) return;
 
-    await _service.markVerified(
-      widget.ticketId,
-      widget.user.email,
-      widget.user.name,
+    await _service.sendToOnsiteQueue(widget.ticketId);
+
+    await _notifService.addNotification(
+      userId: _ticket!.createdBy,
+      ticketId: _ticket!.id,
+      title: 'On-Site Visit Scheduled',
+      body: 'Our team will attend your site shortly.',
+      type: 'schedule',
     );
-
-    if (_ticket != null) {
-      // Notify client
-      await _notifService.addNotification(
-        userId: _ticket!.createdBy,
-        ticketId: _ticket!.id,
-        title: 'Issue Verified',
-        body:
-        'We verified your issue. On-site visit will be scheduled shortly.',
-        type: 'status_update',
-      );
-
-      // Notify TT
-      await _notifService.addNotification(
-        userId: 'tech@adsb.com',
-        ticketId: _ticket!.id,
-        title: 'On-Site Requested',
-        body: 'Ticket ${_ticket!.id} needs on-site attention.',
-        type: 'status_update',
-      );
-    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Sent to TT for on-site assignment.'),
+        content: Text('Ticket sent to on-site queue.'),
         backgroundColor: AppColors.warning,
       ),
     );
@@ -193,7 +188,7 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading && _ticket == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -206,7 +201,10 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     }
 
     final t = _ticket!;
-    final isActive = t.status == 'pending' || t.status == 'verified';
+    final isPending = t.status == 'pending';
+    final isVerified = t.status == 'verified';
+    final isOnsite =
+        t.status == 'pending_onsite' || t.status == 'in_progress';
 
     return Scaffold(
       appBar: AppBar(title: Text(t.id)),
@@ -254,8 +252,14 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ─── ACTIONS ───
-            if (isActive) ...[
+            // ─── Escalation banner ───
+            if (t.escalationReason != null && !isPending)
+              _escalationBanner(t),
+
+            // ═══════════════════════════════════════════
+            // PENDING VIEW
+            // ═══════════════════════════════════════════
+            if (isPending) ...[
               _stepHeader('Step 1', 'Contact the client'),
               const SizedBox(height: 10),
               Row(
@@ -282,78 +286,253 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
 
               const SizedBox(height: 24),
 
-              _stepHeader('Step 2', 'Consult TT (if needed)'),
-              const SizedBox(height: 6),
-              const Text(
-                'Client will NOT see this conversation.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
+              _stepHeader('Step 2', 'Need TT help?'),
               const SizedBox(height: 10),
               SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
+                height: 60,
+                child: ElevatedButton.icon(
                   onPressed: _openInternalChat,
-                  icon: const Icon(Icons.lock_outline, size: 18),
+                  icon: const Icon(Icons.lock_outline, size: 22),
                   label: const Text(
-                    'Internal Chat (ADSB ↔ TT)',
+                    'Internal Chat with TT',
                     style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF5E35B1),
-                    side: const BorderSide(
-                        color: Color(0xFF5E35B1), width: 2),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5E35B1),
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  'Sending your first message will automatically escalate '
+                      'this ticket to TT. They will see it in their Reviews queue.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 24),
 
-              _stepHeader('Step 3', 'Choose outcome'),
+              _stepHeader('Step 3', 'Or resolve it yourself'),
               const SizedBox(height: 10),
-
               _decisionBtn(
                 label: 'Resolve Remotely',
-                subtitle:
-                'Issue fixed over call or chat (with or without TT advice)',
+                subtitle: 'Issue fixed without needing TT',
+                icon: Icons.check_circle_outline,
+                color: AppColors.success,
+                onTap: _resolveRemotely,
+              ),
+            ]
+
+            // ═══════════════════════════════════════════
+            // VERIFIED — Waiting for TT advice
+            // ═══════════════════════════════════════════
+            else if (isVerified) ...[
+              const Text(
+                'Waiting for TT advice',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5E35B1).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF5E35B1).withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.hourglass_top,
+                      color: Color(0xFF5E35B1),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Ticket is with TT. Chat internally or wait for their advice.',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _contactBtn(
+                label: 'Open Internal Chat',
+                icon: Icons.lock_outline,
+                onTap: _openInternalChat,
+                color: const Color(0xFF5E35B1),
+              ),
+              const SizedBox(height: 12),
+              _contactBtn(
+                label: 'Call TT Advisor',
+                icon: Icons.phone_in_talk_outlined,
+                onTap: _callTTAdvisor,
+                color: AppColors.primary,
+              ),
+              const SizedBox(height: 24),
+
+              const Text(
+                'After consulting TT, choose outcome',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _decisionBtn(
+                label: 'Resolve Remotely',
+                subtitle: 'Issue fixed (with or without TT input)',
                 icon: Icons.check_circle_outline,
                 color: AppColors.success,
                 onTap: _resolveRemotely,
               ),
               const SizedBox(height: 10),
               _decisionBtn(
-                label: 'Request On-Site Visit',
-                subtitle: 'Physical attendance needed. TT will assign.',
+                label: 'Send to On-Site Team',
+                subtitle: 'Physical visit needed',
                 icon: Icons.location_on_outlined,
                 color: AppColors.warning,
-                onTap: _requestOnsite,
+                onTap: _sendToOnsite,
               ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
+            ]
+
+            // ═══════════════════════════════════════════
+            // ONSITE — claimed / in progress
+            // ═══════════════════════════════════════════
+            else if (isOnsite) ...[
+                const Text(
+                  'On-site work in progress',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: AppColors.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'This ticket is currently ${t.statusDisplay.toLowerCase()}.',
-                        style: const TextStyle(fontSize: 13),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          color: AppColors.primary, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'On-site team has claimed this job. Check the On-Site tab.',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _contactBtn(
+                  label: 'Open Internal Chat',
+                  icon: Icons.lock_outline,
+                  onTap: _openInternalChat,
+                  color: const Color(0xFF5E35B1),
+                ),
+              ]
+
+              // ═══════════════════════════════════════════
+              // OTHER STATUSES
+              // ═══════════════════════════════════════════
+              else ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline,
+                            color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'This ticket is ${t.statusDisplay.toLowerCase()}.',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────
+  // UI HELPERS
+  // ─────────────────────────────────────────
+
+  Widget _escalationBanner(Ticket t) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF5E35B1).withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF5E35B1).withOpacity(0.25),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.arrow_upward,
+                    size: 14, color: Color(0xFF5E35B1)),
+                SizedBox(width: 6),
+                Text(
+                  'Escalated to TT',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF5E35B1),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              t.escalationReason!,
+              style: const TextStyle(fontSize: 12),
+            ),
+            if (t.assignedToName != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Escalated by ${t.assignedToName}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -362,8 +541,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
       ),
     );
   }
-
-  // ─── UI helpers ───
 
   Widget _stepHeader(String step, String title) {
     return Row(
@@ -384,11 +561,13 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -458,14 +637,17 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     required Color color,
   }) {
     return SizedBox(
-      height: 70,
+      height: 52,
+      width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: onTap,
-        icon: Icon(icon, size: 22),
+        icon: Icon(icon, size: 20),
         label: Text(
           label,
           style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w600),
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,

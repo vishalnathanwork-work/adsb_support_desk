@@ -28,6 +28,7 @@ class Ticket {
   final String? rootCause;
   final String? solutionApplied;
   final String? resolutionNotes;
+  final String? escalationReason;
   final DateTime? resolvedAt;
   final String? assignedTo;
   final String? assignedToName;
@@ -75,6 +76,7 @@ class Ticket {
     this.rootCause,
     this.solutionApplied,
     this.resolutionNotes,
+    this.escalationReason,
     this.resolvedAt,
     this.assignedTo,
     this.assignedToName,
@@ -141,6 +143,7 @@ class Ticket {
     rootCause: json['root_cause'],
     solutionApplied: json['solution_applied'],
     resolutionNotes: json['resolution_notes'],
+    escalationReason: json['escalation_reason'],
     resolvedAt: _ts(json['resolved_at']),
     adsbNotifiedAt: _ts(json['adsb_notified_at']),
     callStartedAt: _ts(json['call_started_at']),
@@ -167,6 +170,7 @@ class Ticket {
     String? rootCause,
     String? solutionApplied,
     String? resolutionNotes,
+    String? escalationReason,
     String? assignedTo,
     String? assignedToName,
     DateTime? resolvedAt,
@@ -195,6 +199,7 @@ class Ticket {
         rootCause: rootCause ?? this.rootCause,
         solutionApplied: solutionApplied ?? this.solutionApplied,
         resolutionNotes: resolutionNotes ?? this.resolutionNotes,
+        escalationReason: escalationReason ?? this.escalationReason,
         resolvedAt: resolvedAt ?? this.resolvedAt,
         assignedTo: assignedTo ?? this.assignedTo,
         assignedToName: assignedToName ?? this.assignedToName,

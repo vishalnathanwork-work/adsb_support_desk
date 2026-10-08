@@ -4,9 +4,9 @@ import '../../models/chat_message.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/chat_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/chat_bubble.dart';
-import '../../widgets/empty_state.dart';
 
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
@@ -25,13 +25,15 @@ class AdsbChatScreen extends StatefulWidget {
 }
 
 class _AdsbChatScreenState extends State<AdsbChatScreen> {
-  final _service = ChatService();
+  final _chatService = ChatService();
   final _ticketService = TicketService();
+  final _notifService = NotificationService();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
   Ticket? _ticket;
   bool _summaryReady = false;
+  bool _escalated = false;
 
   @override
   void initState() {
@@ -52,7 +54,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     setState(() => _ticket = t);
 
     if (t != null) {
-      await _service.ensureTicketSummary(
+      await _chatService.ensureTicketSummary(
         ticket: t,
         channel: widget.channel,
       );
@@ -76,9 +78,50 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
+    // ─── Auto-escalate when ADSB sends first internal message ───
+    final isInternal = widget.channel == 'internal';
+    final isAdsb = widget.user.role == 'adsb';
+
+    if (isInternal && isAdsb && _ticket != null && !_escalated) {
+      final wasPending = _ticket!.status == 'pending';
+
+      if (wasPending) {
+        await _ticketService.autoEscalateIfNeeded(
+          ticketId: widget.ticketId,
+          reason: text,
+          adsbEmail: widget.user.email,
+          adsbName: widget.user.name,
+        );
+
+        // Notify TT
+        await _notifService.addNotification(
+          userId: 'tech@adsb.com',
+          ticketId: widget.ticketId,
+          title: 'New Ticket Escalated',
+          body: '${widget.user.name} escalated ${widget.ticketId}.',
+          type: 'status_update',
+        );
+
+        // Notify client (non-specific)
+        await _notifService.addNotification(
+          userId: _ticket!.createdBy,
+          ticketId: widget.ticketId,
+          title: 'Issue Being Reviewed',
+          body: 'Our team is reviewing your issue.',
+          type: 'status_update',
+        );
+
+        // Refresh local copy
+        await _loadTicket();
+      }
+
+      if (mounted) setState(() => _escalated = true);
+    }
+
     _controller.clear();
 
-    await _service.sendMessage(
+    await _chatService.sendMessage(
       ticketId: widget.ticketId,
       channel: widget.channel,
       senderEmail: widget.user.email,
@@ -94,10 +137,24 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          isInternal
-              ? 'Internal — ${widget.ticketId}'
-              : 'Chat — ${widget.ticketId}',
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isInternal
+                  ? 'Internal — ${widget.ticketId}'
+                  : 'Chat — ${widget.ticketId}',
+              style: const TextStyle(fontSize: 16),
+            ),
+            if (_ticket != null)
+              Text(
+                '${_ticket!.siteName} · ${_ticket!.laneName}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+          ],
         ),
         backgroundColor: isInternal
             ? const Color(0xFF5E35B1)
@@ -130,7 +187,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
       body: Column(
         children: [
-          // Warning banner for internal chat
           if (isInternal)
             Container(
               width: double.infinity,
@@ -155,7 +211,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
             ),
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
-              stream: _service.streamMessages(
+              stream: _chatService.streamMessages(
                 ticketId: widget.ticketId,
                 channel: widget.channel,
               ),
@@ -164,18 +220,14 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                     !_summaryReady) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
 
                 final messages = snapshot.data ?? [];
-
                 if (messages.isEmpty && _summaryReady) {
-                  return const EmptyState(
-                    icon: Icons.chat_bubble_outline,
-                    title: 'No messages yet',
-                    subtitle: 'Start the conversation',
+                  return const Center(
+                    child: Text('No messages yet. Say something.'),
                   );
                 }
 
