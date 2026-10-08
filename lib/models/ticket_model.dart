@@ -256,10 +256,18 @@ class Ticket {
   bool get isUnassigned => assignedTo == null && status == 'pending';
   bool get isBeingVerified => assignedTo != null && status == 'pending';
 
-  String get laneDirectionDisplay =>
-      laneDirection == 'exit' ? 'Exit' : 'Entry';
+  String get laneDirectionDisplay {
+    switch (laneDirection) {
+      case 'exit':
+        return 'Exit';
+      case 'both':
+        return 'Entry + Exit';
+      case 'entry':
+      default:
+        return 'Entry';
+    }
+  }
 
-  /// "Hospital Klang — Main Building → P1 (Entry)"
   String get fullLocationDisplay {
     if (laneName.isEmpty) return siteName;
     return '$siteName → $laneName ($laneDirectionDisplay)';

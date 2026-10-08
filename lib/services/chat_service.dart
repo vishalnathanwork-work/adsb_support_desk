@@ -117,7 +117,8 @@ class ChatService {
     if (channel == 'internal') {
       buffer.writeln('');
       buffer.writeln('🔒 INTERNAL CHANNEL');
-      buffer.writeln('ADSB ↔ TT coordination only. Client cannot see this.');
+      buffer.writeln(
+          'ADSB ↔ TT coordination only. Client cannot see this.');
     } else {
       buffer.writeln('');
       buffer.writeln('💬 TICKET CHANNEL');

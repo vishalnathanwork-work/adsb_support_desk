@@ -6,21 +6,20 @@ import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
 import '../client/client_profile_tab.dart';
 import '../main_navigation.dart';
-import '../onsite/onsite_queue_screen.dart';
-import 'adsb_queue_screen.dart';
+import 'onsite_queue_screen.dart';
 
-class AdsbDashboard extends StatefulWidget {
+class OnsiteDashboard extends StatefulWidget {
   final UserModel user;
 
-  const AdsbDashboard({super.key, required this.user});
+  const OnsiteDashboard({super.key, required this.user});
 
   @override
-  State<AdsbDashboard> createState() => _AdsbDashboardState();
+  State<OnsiteDashboard> createState() => _OnsiteDashboardState();
 }
 
-class _AdsbDashboardState extends State<AdsbDashboard> {
-  int _verificationCount = 0;
-  int _onsiteCount = 0;
+class _OnsiteDashboardState extends State<OnsiteDashboard> {
+  int _unclaimedCount = 0;
+  int _myJobsCount = 0;
 
   @override
   void initState() {
@@ -30,14 +29,16 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
 
   Future<void> _loadStats() async {
     final service = TicketService();
-    final pending = await service.getPendingTickets();
-    final verified = await service.getVerifiedTickets();
-    final onsite = await service.getPendingOnsiteTickets();
+    final unclaimed = await service.getPendingOnsiteTickets();
+    final inProgress = await service.getInProgressTickets();
+    final myJobs = inProgress
+        .where((t) => t.assignedTo == widget.user.email)
+        .length;
 
     if (!mounted) return;
     setState(() {
-      _verificationCount = pending.length + verified.length;
-      _onsiteCount = onsite.length;
+      _unclaimedCount = unclaimed.length;
+      _myJobsCount = myJobs;
     });
   }
 
@@ -49,21 +50,16 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
         NavTab(
           label: 'Home',
           icon: Icons.home_outlined,
-          page: _AdsbHome(
+          page: _OnsiteHome(
             user: widget.user,
-            verificationCount: _verificationCount,
-            onsiteCount: _onsiteCount,
+            unclaimedCount: _unclaimedCount,
+            myJobsCount: _myJobsCount,
             onRefresh: _loadStats,
           ),
         ),
         NavTab(
-          label: 'Verify',
-          icon: Icons.support_agent,
-          page: AdsbQueueScreen(user: widget.user),
-        ),
-        NavTab(
-          label: 'On-Site',
-          icon: Icons.location_on_outlined,
+          label: 'Jobs',
+          icon: Icons.work_outline,
           page: OnsiteQueueScreen(user: widget.user),
         ),
         NavTab(
@@ -86,16 +82,16 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
   }
 }
 
-class _AdsbHome extends StatelessWidget {
+class _OnsiteHome extends StatelessWidget {
   final UserModel user;
-  final int verificationCount;
-  final int onsiteCount;
+  final int unclaimedCount;
+  final int myJobsCount;
   final VoidCallback onRefresh;
 
-  const _AdsbHome({
+  const _OnsiteHome({
     required this.user,
-    required this.verificationCount,
-    required this.onsiteCount,
+    required this.unclaimedCount,
+    required this.myJobsCount,
     required this.onRefresh,
   });
 
@@ -103,9 +99,10 @@ class _AdsbHome extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ADSB Support Team'),
+        title: const Text('On-Site Team'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
+          IconButton(
+              icon: const Icon(Icons.refresh), onPressed: onRefresh),
         ],
       ),
       body: SafeArea(
@@ -116,15 +113,16 @@ class _AdsbHome extends StatelessWidget {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryDark],
+                  colors: [Color(0xFFE65100), Color(0xFFBF360C)],
                 ),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Support Team',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const Text('On-Site Technician',
+                      style:
+                      TextStyle(color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(user.name,
                       style: const TextStyle(
@@ -135,42 +133,42 @@ class _AdsbHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
+            const Text('Your Stats',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: _statCard('To Verify', '$verificationCount',
-                      AppColors.warning),
+                  child: _statCard(
+                    label: 'Unclaimed',
+                    value: '$unclaimedCount',
+                    color: AppColors.warning,
+                    icon: Icons.inbox_outlined,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _statCard(
-                      'On-Site', '$onsiteCount', AppColors.accent),
+                    label: 'My Jobs',
+                    value: '$myJobsCount',
+                    color: AppColors.primary,
+                    icon: Icons.work_outline,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
             const Text('Quick Actions',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             _actionTile(
               context,
-              Icons.support_agent,
-              'Verification Queue',
-              'Chat or call clients',
+              Icons.work_outline,
+              'My Jobs',
+              'View claimed and in-progress jobs',
               AppColors.primary,
-                  () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AdsbQueueScreen(user: user),
-                ),
-              ),
-            ),
-            _actionTile(
-              context,
-              Icons.location_on_outlined,
-              'On-Site Jobs',
-              'Claim and complete physical visits',
-              AppColors.accent,
                   () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -184,20 +182,28 @@ class _AdsbHome extends StatelessWidget {
     );
   }
 
-  Widget _statCard(String label, String value, Color color) {
+  Widget _statCard({
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 12),
           Text(value,
               style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(height: 4),
+                  fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 2),
           Text(label,
               style: const TextStyle(
                   fontSize: 12, color: AppColors.textSecondary)),
@@ -218,7 +224,6 @@ class _AdsbHome extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,

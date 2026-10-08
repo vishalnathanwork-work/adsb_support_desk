@@ -3,25 +3,25 @@ import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
+import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/status_badge.dart';
-import '../../utils/date_formatter.dart';
-import 'adsb_ticket_action_screen.dart';
+import 'onsite_job_screen.dart';
 
-class AdsbQueueScreen extends StatefulWidget {
+class OnsiteQueueScreen extends StatefulWidget {
   final UserModel user;
 
-  const AdsbQueueScreen({super.key, required this.user});
+  const OnsiteQueueScreen({super.key, required this.user});
 
   @override
-  State<AdsbQueueScreen> createState() => _AdsbQueueScreenState();
+  State<OnsiteQueueScreen> createState() => _OnsiteQueueScreenState();
 }
 
-class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
+class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
   final _service = TicketService();
   List<Ticket> _tickets = [];
   bool _isLoading = true;
-  String _filter = 'active'; // 'active' | 'all'
+  String _filter = 'unclaimed';
 
   @override
   void initState() {
@@ -32,14 +32,16 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   Future<void> _load() async {
     setState(() => _isLoading = true);
 
-    // Load both pending (new) and verified (in progress with TT)
-    final pending = await _service.getPendingTickets();
-    final verified = await _service.getVerifiedTickets();
+    final pendingOnsite = await _service.getPendingOnsiteTickets();
+    final inProgress = await _service.getInProgressTickets();
 
-    final combined = [...pending, ...verified];
-
-    // Sort: oldest first (FIFO queue)
-    combined.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final combined = [...pendingOnsite, ...inProgress];
+    combined.sort((a, b) {
+      final aUnclaimed = a.status == 'pending_onsite';
+      final bUnclaimed = b.status == 'pending_onsite';
+      if (aUnclaimed != bUnclaimed) return aUnclaimed ? -1 : 1;
+      return a.createdAt.compareTo(b.createdAt);
+    });
 
     if (!mounted) return;
     setState(() {
@@ -49,48 +51,55 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   }
 
   List<Ticket> get _filtered {
-    if (_filter == 'active') {
-      // Active = anything ADSB still owns
-      return _tickets
-          .where((t) => t.status == 'pending' || t.status == 'verified')
-          .toList();
+    switch (_filter) {
+      case 'unclaimed':
+        return _tickets.where((t) => t.status == 'pending_onsite').toList();
+      case 'mine':
+        return _tickets
+            .where((t) =>
+        t.status == 'in_progress' &&
+            t.assignedTo == widget.user.email)
+            .toList();
+      case 'all':
+      default:
+        return _tickets;
     }
-    return _tickets;
   }
 
   @override
   Widget build(BuildContext context) {
+    final unclaimedCount =
+        _tickets.where((t) => t.status == 'pending_onsite').length;
+    final mineCount = _tickets
+        .where((t) =>
+    t.status == 'in_progress' && t.assignedTo == widget.user.email)
+        .length;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Verification Queue'),
+        title: const Text('On-Site Jobs'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
       body: Column(
         children: [
-          // ── Filter row ──
           Container(
             padding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
-            child: Row(
-              children: [
-                _filterChip('Active', 'active'),
-                const SizedBox(width: 8),
-                _filterChip('All', 'all'),
-                const Spacer(),
-                Text(
-                  '${_filtered.length} ticket${_filtered.length == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip(
+                      'Unclaimed ($unclaimedCount)', 'unclaimed'),
+                  const SizedBox(width: 8),
+                  _filterChip('My Jobs ($mineCount)', 'mine'),
+                  const SizedBox(width: 8),
+                  _filterChip('All', 'all'),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -99,8 +108,8 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 : _filtered.isEmpty
                 ? const EmptyState(
               icon: Icons.check_circle_outline,
-              title: 'All caught up!',
-              subtitle: 'No tickets in the queue',
+              title: 'No jobs here',
+              subtitle: 'Jobs will appear once assigned',
             )
                 : RefreshIndicator(
               onRefresh: _load,
@@ -128,14 +137,15 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   }
 
   Widget _ticketTile(Ticket t) {
-    final isVerified = t.status == 'verified';
+    final isUnclaimed = t.status == 'pending_onsite';
+    final isMine = t.assignedTo == widget.user.email;
 
     return InkWell(
       onTap: () async {
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => AdsbTicketActionScreen(
+            builder: (_) => OnsiteJobScreen(
               ticketId: t.id,
               user: widget.user,
             ),
@@ -151,12 +161,10 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isVerified
-                ? const Color(0xFF5E35B1).withOpacity(0.4)
-                : (t.isBeingVerified
-                ? AppColors.accent.withOpacity(0.4)
-                : AppColors.divider),
-            width: isVerified || t.isBeingVerified ? 2 : 1,
+            color: isUnclaimed
+                ? AppColors.warning.withOpacity(0.5)
+                : AppColors.primary.withOpacity(0.5),
+            width: 2,
           ),
         ),
         child: Column(
@@ -174,21 +182,39 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                     ),
                   ),
                 ),
-                if (isVerified)
+                if (isUnclaimed)
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     margin: const EdgeInsets.only(right: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF5E35B1).withOpacity(0.15),
+                      color: AppColors.warning.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
-                      'WITH TT',
+                      'UNCLAIMED',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF5E35B1),
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  )
+                else if (isMine)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'MINE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success,
                       ),
                     ),
                   ),
@@ -214,21 +240,20 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.person_outline,
+                const Icon(Icons.location_on_outlined,
                     size: 14, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    '${t.createdByName} · ${t.siteName} — ${t.laneName}',
+                    '${t.siteName} — ${t.laneName}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Text(
-                  DateFormatter.relative(t.createdAt),
+                  DateFormatter.relative(t.updatedAt),
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -236,35 +261,6 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ),
               ],
             ),
-            if (isVerified && t.escalationReason != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5E35B1).withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.lock_outline,
-                        size: 12, color: Color(0xFF5E35B1)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Escalated to TT — chat internally to continue',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF5E35B1),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),

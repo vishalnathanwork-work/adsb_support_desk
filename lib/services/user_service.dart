@@ -28,6 +28,7 @@ class UserService {
     }
   }
 
+  /// External users = clients + operators
   Future<List<Map<String, dynamic>>> getExternalUsers() async {
     final all = await getAllUsers();
     return all.where((u) {
@@ -36,11 +37,15 @@ class UserService {
     }).toList();
   }
 
+  /// Internal team = adsb + technician + onsite + admin
   Future<List<Map<String, dynamic>>> getInternalTeam() async {
     final all = await getAllUsers();
     return all.where((u) {
       final role = u['role'];
-      return role == 'adsb' || role == 'technician' || role == 'admin';
+      return role == 'adsb' ||
+          role == 'technician' ||
+          role == 'onsite' ||
+          role == 'admin';
     }).toList();
   }
 

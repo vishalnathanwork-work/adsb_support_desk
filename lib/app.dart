@@ -9,6 +9,7 @@ import 'screens/client/client_dashboard.dart';
 import 'screens/operator/operator_dashboard.dart';
 import 'screens/adsb/adsb_dashboard.dart';
 import 'screens/technician/technician_dashboard.dart';
+import 'screens/onsite/onsite_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
 class AdsbSupportApp extends StatelessWidget {
@@ -26,7 +27,6 @@ class AdsbSupportApp extends StatelessWidget {
         AppRoutes.login: (_) => const LoginScreen(),
       },
       onGenerateRoute: (settings) {
-        // Dashboards need the user object passed as an argument
         final user = settings.arguments as UserModel?;
 
         switch (settings.name) {
@@ -49,6 +49,11 @@ class AdsbSupportApp extends StatelessWidget {
             if (user == null) return _fallbackLogin();
             return MaterialPageRoute(
               builder: (_) => TechnicianDashboard(user: user),
+            );
+          case AppRoutes.onsiteDashboard:
+            if (user == null) return _fallbackLogin();
+            return MaterialPageRoute(
+              builder: (_) => OnsiteDashboard(user: user),
             );
           case AppRoutes.adminDashboard:
             if (user == null) return _fallbackLogin();

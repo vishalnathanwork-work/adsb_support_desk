@@ -30,6 +30,8 @@ class RoleRouter {
         return '/adsb';
       case 'technician':
         return '/technician';
+      case 'onsite':
+        return '/onsite';
       case 'admin':
         return '/admin';
       default:

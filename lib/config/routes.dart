@@ -5,5 +5,6 @@ class AppRoutes {
   static const String operatorDashboard = '/operator';
   static const String adsbDashboard = '/adsb';
   static const String technicianDashboard = '/technician';
+  static const String onsiteDashboard = '/onsite';
   static const String adminDashboard = '/admin';
 }

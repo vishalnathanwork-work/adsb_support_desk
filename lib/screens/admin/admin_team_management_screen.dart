@@ -86,7 +86,23 @@ class _AdminTeamManagementScreenState
               Text('3. Copy the new UID'),
               Text('4. Firestore → users → Add document'),
               Text('5. Paste UID as document ID'),
-              Text('6. Set role: adsb / technician / admin'),
+              Text('6. Set role:'),
+              Padding(
+                padding: EdgeInsets.only(left: 16, top: 4),
+                child: Text('• adsb — ADSB Support'),
+              ),
+              Padding(
+                padding: EdgeInsets.only(left: 16),
+                child: Text('• technician — Technical Advisor'),
+              ),
+              Padding(
+                padding: EdgeInsets.only(left: 16),
+                child: Text('• onsite — On-Site Technician'),
+              ),
+              Padding(
+                padding: EdgeInsets.only(left: 16),
+                child: Text('• admin — Administrator'),
+              ),
               SizedBox(height: 12),
               Text(
                 'Once Cloud Functions are enabled, this button will create members directly.',
@@ -111,7 +127,7 @@ class _AdminTeamManagementScreenState
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => UserFormSheet(
-        allowedRoles: const ['adsb', 'technician', 'admin'],
+        allowedRoles: const ['adsb', 'technician', 'onsite', 'admin'],
         existingUser: userData,
       ),
     );
@@ -158,7 +174,7 @@ class _AdminTeamManagementScreenState
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Internal teams: ADSB Support, TT (Technical Advisor), and Admins.',
+                    'Internal teams: ADSB Support, TT (Technical Advisor), On-Site Technicians, and Admins.',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -178,7 +194,8 @@ class _AdminTeamManagementScreenState
                 : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                padding:
+                const EdgeInsets.fromLTRB(16, 8, 16, 80),
                 itemCount: _filtered.length,
                 itemBuilder: (context, i) =>
                     _memberCard(_filtered[i]),
@@ -213,6 +230,7 @@ class _AdminTeamManagementScreenState
                 _chip('All', 'all'),
                 _chip('ADSB Support', 'adsb'),
                 _chip('Tech Advisor', 'technician'),
+                _chip('On-Site', 'onsite'),
                 _chip('Admin', 'admin'),
               ],
             ),
@@ -340,6 +358,8 @@ class _AdminTeamManagementScreenState
         return 'ADSB Support';
       case 'technician':
         return 'Technical Advisor';
+      case 'onsite':
+        return 'On-Site Technician';
       case 'admin':
         return 'Administrator';
       default:
@@ -353,6 +373,8 @@ class _AdminTeamManagementScreenState
         return AppColors.primary;
       case 'technician':
         return const Color(0xFF5E35B1);
+      case 'onsite':
+        return const Color(0xFFE65100);
       case 'admin':
         return AppColors.textPrimary;
       default:

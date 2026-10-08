@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/site_model.dart';
 import '../../models/user_model.dart';
-import '../../services/notification_service.dart';
 import '../../services/preset_service.dart';
 import '../../services/site_service.dart';
 import '../../services/ticket_service.dart';
@@ -20,23 +19,19 @@ class CreateTicketScreen extends StatefulWidget {
 class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _formKey = GlobalKey<FormState>();
   final _ticketService = TicketService();
-  final _notificationService = NotificationService();
   final _presetService = PresetService();
   final _siteService = SiteService();
 
-  // ─── Selections ───
   SiteModel? _selectedSite;
   Lane? _selectedLane;
-  String? _selectedDirection; // 'entry' | 'exit'
+  String? _selectedDirection;
   String? _selectedProductType;
   String? _selectedProductIssue;
 
-  // ─── Text controllers ───
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  // ─── Preset data ───
   List<SiteModel> _sites = [];
   List<String> _productTypes = [];
   List<String> _productIssues = [];
@@ -76,10 +71,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     });
   }
 
-  // ─────────────────────────────────────────────────────────
-  // SUBMIT
-  // ─────────────────────────────────────────────────────────
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -92,7 +83,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
     if (_selectedDirection == null) {
-      _showError('Please choose Entry or Exit');
+      _showError('Please choose what is affected');
       return;
     }
 
@@ -123,26 +114,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
 
-    await _notificationService.addNotification(
-      userId: widget.user.email,
-      ticketId: ticket.id,
-      title: 'Ticket Submitted',
-      body: 'Your ticket ${ticket.id} has been received.',
-      type: 'status_update',
-    );
-
-    await _notificationService.addNotification(
-      userId: 'adsb@adsb.com',
-      ticketId: ticket.id,
-      title: 'New Ticket',
-      body: '${widget.user.name} created ticket ${ticket.id}.',
-      type: 'status_update',
-    );
-
     if (!mounted) return;
     setState(() => _isSubmitting = false);
 
-    // ─── Success dialog ───
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -158,22 +132,15 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Your ticket ID is:',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-              ),
-            ),
+            const Text('Your ticket ID is:',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
             const SizedBox(height: 4),
-            Text(
-              ticket.id,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
+            Text(ticket.id,
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary)),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(10),
@@ -188,7 +155,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   const SizedBox(height: 6),
                   _summaryRow('Parking', ticket.laneName),
                   const SizedBox(height: 6),
-                  _summaryRow('Direction', ticket.laneDirectionDisplay),
+                  _summaryRow('Affected', ticket.laneDirectionDisplay),
                   const SizedBox(height: 6),
                   _summaryRow('Product', ticket.productType),
                 ],
@@ -220,22 +187,14 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       children: [
         SizedBox(
           width: 70,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          child: Text(label,
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary)),
         ),
         Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          child: Text(value,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600)),
         ),
       ],
     );
@@ -246,10 +205,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       SnackBar(content: Text(msg), backgroundColor: AppColors.error),
     );
   }
-
-  // ─────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -263,7 +218,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // ─── Location section ───
               _sectionTitle('Location'),
               _buildSiteDropdown(),
               const SizedBox(height: 12),
@@ -272,14 +226,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               _buildDirectionSelector(),
               const SizedBox(height: 20),
 
-              // ─── Product section ───
               _sectionTitle('Product Details'),
               _buildProductTypeDropdown(),
               const SizedBox(height: 12),
               _buildProductIssueDropdown(),
               const SizedBox(height: 20),
 
-              // ─── Contact section ───
               _sectionTitle('Contact Person'),
               _buildTextInput(
                 controller: _contactNameController,
@@ -299,7 +251,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ─── Description section ───
               _sectionTitle('Issue Description (Optional)'),
               _buildTextArea(),
               const SizedBox(height: 32),
@@ -320,20 +271,13 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
-      ),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary)),
     );
   }
-
-  // ═══════════════════════════════════════════════
-  // SITE DROPDOWN
-  // ═══════════════════════════════════════════════
 
   Widget _buildSiteDropdown() {
     if (_sites.isEmpty) {
@@ -345,10 +289,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select site',
-        prefixIcon: Icon(
-          Icons.location_on_outlined,
-          color: AppColors.textSecondary,
-        ),
+        prefixIcon:
+        Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
       ),
       items: _sites.map((s) {
         return DropdownMenuItem(
@@ -368,10 +310,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════
-  // PARKING LABEL DROPDOWN (P1, P2, ...)
-  // ═══════════════════════════════════════════════
-
   Widget _buildLaneDropdown() {
     if (_selectedSite == null) {
       return _disabledHint('Select a site first');
@@ -387,10 +325,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select parking label',
-        prefixIcon: Icon(
-          Icons.local_parking_outlined,
-          color: AppColors.textSecondary,
-        ),
+        prefixIcon:
+        Icon(Icons.local_parking_outlined, color: AppColors.textSecondary),
       ),
       items: lanes.map((lane) {
         return DropdownMenuItem(
@@ -402,16 +338,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         if (id == null) return;
         setState(() {
           _selectedLane = lanes.firstWhere((l) => l.id == id);
-          _selectedDirection = null; // reset direction when lane changes
+          _selectedDirection = null;
         });
       },
       validator: (v) => v == null ? 'Required' : null,
     );
   }
-
-  // ═══════════════════════════════════════════════
-  // DIRECTION SELECTOR (Entry / Exit)
-  // ═══════════════════════════════════════════════
 
   Widget _buildDirectionSelector() {
     if (_selectedLane == null) {
@@ -435,19 +367,14 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.compare_arrows,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
+              const Icon(Icons.compare_arrows,
+                  size: 16, color: AppColors.textSecondary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Is ${_selectedLane!.name} for Entry or Exit?',
+                  'What is affected at ${_selectedLane!.name}?',
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                      fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -463,13 +390,22 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   color: AppColors.success,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: _directionOption(
                   label: 'Exit',
                   value: 'exit',
                   icon: Icons.logout,
                   color: AppColors.warning,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _directionOption(
+                  label: 'Both',
+                  value: 'both',
+                  icon: Icons.swap_horiz,
+                  color: AppColors.accent,
                 ),
               ),
             ],
@@ -492,7 +428,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
         decoration: BoxDecoration(
           color: selected ? color.withOpacity(0.12) : Colors.white,
           borderRadius: BorderRadius.circular(10),
@@ -503,7 +439,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         ),
         child: Column(
           children: [
-            Icon(icon, color: selected ? color : AppColors.textSecondary),
+            Icon(icon,
+                size: 20,
+                color: selected ? color : AppColors.textSecondary),
             const SizedBox(height: 6),
             Text(
               label,
@@ -519,10 +457,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════
-  // PRODUCT DROPDOWNS
-  // ═══════════════════════════════════════════════
-
   Widget _buildProductTypeDropdown() {
     if (_productTypes.isEmpty) {
       return _emptyMessage('No product types loaded. Contact admin.');
@@ -532,16 +466,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select product type',
-        prefixIcon: Icon(
-          Icons.build_outlined,
-          color: AppColors.textSecondary,
-        ),
+        prefixIcon: Icon(Icons.build_outlined, color: AppColors.textSecondary),
       ),
       items: _productTypes
           .map((p) => DropdownMenuItem(
-        value: p,
-        child: Text(p, overflow: TextOverflow.ellipsis),
-      ))
+          value: p, child: Text(p, overflow: TextOverflow.ellipsis)))
           .toList(),
       onChanged: (v) => setState(() => _selectedProductType = v),
       validator: (v) => v == null ? 'Required' : null,
@@ -557,25 +486,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       isExpanded: true,
       decoration: const InputDecoration(
         hintText: 'Select issue',
-        prefixIcon: Icon(
-          Icons.report_problem_outlined,
-          color: AppColors.textSecondary,
-        ),
+        prefixIcon: Icon(Icons.report_problem_outlined,
+            color: AppColors.textSecondary),
       ),
       items: _productIssues
           .map((p) => DropdownMenuItem(
-        value: p,
-        child: Text(p, overflow: TextOverflow.ellipsis),
-      ))
+          value: p, child: Text(p, overflow: TextOverflow.ellipsis)))
           .toList(),
       onChanged: (v) => setState(() => _selectedProductIssue = v),
       validator: (v) => v == null ? 'Required' : null,
     );
   }
-
-  // ═══════════════════════════════════════════════
-  // HELPERS
-  // ═══════════════════════════════════════════════
 
   Widget _emptyMessage(String message) {
     return Container(
@@ -587,14 +508,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.warning_amber_outlined,
-            color: AppColors.warning,
-          ),
+          const Icon(Icons.warning_amber_outlined, color: AppColors.warning),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(message, style: const TextStyle(fontSize: 13)),
-          ),
+              child: Text(message, style: const TextStyle(fontSize: 13))),
         ],
       ),
     );
@@ -611,13 +528,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         children: [
           const Icon(Icons.info_outline, color: AppColors.textSecondary),
           const SizedBox(width: 10),
-          Text(
-            message,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          Text(message,
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary)),
         ],
       ),
     );

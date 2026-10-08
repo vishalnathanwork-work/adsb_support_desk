@@ -4,14 +4,13 @@ import '../../models/chat_message.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/chat_service.dart';
-import '../../services/notification_service.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/chat_bubble.dart';
 
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
   final UserModel user;
-  final String channel; // 'ticket' | 'internal'
+  final String channel;
 
   const AdsbChatScreen({
     super.key,
@@ -27,18 +26,17 @@ class AdsbChatScreen extends StatefulWidget {
 class _AdsbChatScreenState extends State<AdsbChatScreen> {
   final _chatService = ChatService();
   final _ticketService = TicketService();
-  final _notifService = NotificationService();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
   Ticket? _ticket;
   bool _summaryReady = false;
-  bool _escalated = false;
+  bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
-    _loadTicket();
+    _bootstrap();
   }
 
   @override
@@ -48,7 +46,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     super.dispose();
   }
 
-  Future<void> _loadTicket() async {
+  Future<void> _bootstrap() async {
     final t = await _ticketService.getTicketById(widget.ticketId);
     if (!mounted) return;
     setState(() => _ticket = t);
@@ -77,16 +75,17 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
 
-    // ─── Auto-escalate when ADSB sends first internal message ───
+    setState(() => _isSending = true);
+
     final isInternal = widget.channel == 'internal';
     final isAdsb = widget.user.role == 'adsb';
 
-    if (isInternal && isAdsb && _ticket != null && !_escalated) {
-      final wasPending = _ticket!.status == 'pending';
-
-      if (wasPending) {
+    // Auto-escalate when ADSB sends first internal message.
+    // Notifications fired inside TicketService.autoEscalateIfNeeded().
+    if (isInternal && isAdsb && _ticket != null) {
+      if (_ticket!.status == 'pending') {
         await _ticketService.autoEscalateIfNeeded(
           ticketId: widget.ticketId,
           reason: text,
@@ -94,29 +93,10 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
           adsbName: widget.user.name,
         );
 
-        // Notify TT
-        await _notifService.addNotification(
-          userId: 'tech@adsb.com',
-          ticketId: widget.ticketId,
-          title: 'New Ticket Escalated',
-          body: '${widget.user.name} escalated ${widget.ticketId}.',
-          type: 'status_update',
-        );
-
-        // Notify client (non-specific)
-        await _notifService.addNotification(
-          userId: _ticket!.createdBy,
-          ticketId: widget.ticketId,
-          title: 'Issue Being Reviewed',
-          body: 'Our team is reviewing your issue.',
-          type: 'status_update',
-        );
-
-        // Refresh local copy
-        await _loadTicket();
+        final fresh =
+        await _ticketService.getTicketById(widget.ticketId);
+        if (mounted) setState(() => _ticket = fresh);
       }
-
-      if (mounted) setState(() => _escalated = true);
     }
 
     _controller.clear();
@@ -129,6 +109,9 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       senderRole: widget.user.role,
       message: text,
     );
+
+    if (!mounted) return;
+    setState(() => _isSending = false);
   }
 
   @override
@@ -150,15 +133,12 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               Text(
                 '${_ticket!.siteName} · ${_ticket!.laneName}',
                 style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.normal,
-                ),
+                    fontSize: 11, fontWeight: FontWeight.normal),
               ),
           ],
         ),
-        backgroundColor: isInternal
-            ? const Color(0xFF5E35B1)
-            : AppColors.primary,
+        backgroundColor:
+        isInternal ? const Color(0xFF5E35B1) : AppColors.primary,
         actions: [
           if (isInternal)
             Padding(
@@ -175,10 +155,9 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                   child: Text(
                     'ADSB ↔ TT',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -192,47 +171,49 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               color: const Color(0xFF5E35B1).withOpacity(0.1),
-              child: Row(
-                children: const [
+              child: const Row(
+                children: [
                   Icon(Icons.lock, size: 14, color: Color(0xFF5E35B1)),
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Private channel — client cannot see this conversation.',
                       style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF5E35B1),
-                        fontWeight: FontWeight.w600,
-                      ),
+                          fontSize: 11,
+                          color: Color(0xFF5E35B1),
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
               ),
             ),
           Expanded(
-            child: StreamBuilder<List<ChatMessage>>(
+            child: !_summaryReady
+                ? const Center(child: CircularProgressIndicator())
+                : StreamBuilder<List<ChatMessage>>(
               stream: _chatService.streamMessages(
                 ticketId: widget.ticketId,
                 channel: widget.channel,
               ),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !_summaryReady) {
-                  return const Center(child: CircularProgressIndicator());
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Center(
+                      child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(
+                      child: Text('Error: ${snapshot.error}'));
                 }
 
                 final messages = snapshot.data ?? [];
-                if (messages.isEmpty && _summaryReady) {
+                if (messages.isEmpty) {
                   return const Center(
-                    child: Text('No messages yet. Say something.'),
-                  );
+                      child: Text('No messages yet. Say something.'));
                 }
 
-                WidgetsBinding.instance
-                    .addPostFrameCallback((_) => _scrollToBottom());
+                WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _scrollToBottom());
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -269,6 +250,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                       controller: _controller,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
+                      enabled: !_isSending,
                       decoration: InputDecoration(
                         hintText: isInternal
                             ? 'Internal note to TT team...'
@@ -278,7 +260,21 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                       ),
                     ),
                   ),
-                  IconButton(
+                  _isSending
+                      ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: isInternal
+                            ? const Color(0xFF5E35B1)
+                            : AppColors.primary,
+                      ),
+                    ),
+                  )
+                      : IconButton(
                     icon: Icon(
                       Icons.send,
                       color: isInternal

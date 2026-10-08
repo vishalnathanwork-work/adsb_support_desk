@@ -4,9 +4,10 @@ class UserModel {
   final String role;
   final String? phone;
   final String? company;
-  final String? clientId;
   final bool isActive;
   final List<String> siteIds;
+  final String? clientId;
+  final String? clientName;
 
   UserModel({
     required this.email,
@@ -14,9 +15,10 @@ class UserModel {
     required this.role,
     this.phone,
     this.company,
-    this.clientId,
     this.isActive = true,
     this.siteIds = const [],
+    this.clientId,
+    this.clientName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -28,6 +30,7 @@ class UserModel {
     'is_active': isActive,
     'site_ids': siteIds,
     'client_id': clientId,
+    'client_name': clientName,
   };
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -36,27 +39,16 @@ class UserModel {
     role: json['role'] ?? 'client',
     phone: json['phone'],
     company: json['company'],
-    clientId: json['client_id'],
     isActive: json['is_active'] ?? true,
     siteIds: _parseStringList(json['site_ids']),
+    clientId: json['client_id'],
+    clientName: json['client_name'],
   );
 
-  /// Safely converts a Firestore value into a `List<String>`.
-  /// Handles: null, String, `List<String>`, `List<dynamic>`.
   static List<String> _parseStringList(dynamic value) {
     if (value == null) return [];
-
-    // Single string → wrap in list
-    if (value is String) {
-      return value.isEmpty ? [] : [value];
-    }
-
-    // Already a list → convert elements to String
-    if (value is List) {
-      return value.map((e) => e.toString()).toList();
-    }
-
-    // Fallback
+    if (value is String) return value.isEmpty ? [] : [value];
+    if (value is List) return value.map((e) => e.toString()).toList();
     return [];
   }
 
@@ -65,9 +57,18 @@ class UserModel {
   bool get isOperator => role == 'operator';
   bool get isAdsbTeam => role == 'adsb';
   bool get isTechnician => role == 'technician';
+  bool get isOnsiteTeam => role == 'onsite';
   bool get isAdmin => role == 'admin';
-  bool get isInternal => isAdsbTeam || isTechnician || isAdmin;
-  bool get hasClient => clientId != null && clientId!.isNotEmpty;
+
+  bool get isInternal =>
+      isAdsbTeam || isTechnician || isOnsiteTeam || isAdmin;
+
+  /// Anyone who can see and claim on-site jobs.
+  /// - onsite team (dedicated)
+  /// - adsb support (also does on-site)
+  /// - admin (override)
+  bool get canDoOnsite =>
+      isOnsiteTeam || isAdsbTeam || isAdmin;
 
   String get roleDisplayName {
     switch (role) {
@@ -79,6 +80,8 @@ class UserModel {
         return 'ADSB Support Team';
       case 'technician':
         return 'Technical Advisor';
+      case 'onsite':
+        return 'On-Site Technician';
       case 'admin':
         return 'Administrator';
       default:

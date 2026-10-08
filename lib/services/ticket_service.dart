@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/ticket_model.dart';
+import 'notification_service.dart';
 
 class TicketService {
   final CollectionReference<Map<String, dynamic>> _col =
   FirebaseFirestore.instance.collection('tickets');
+
+  final _notif = NotificationService();
 
   // ═══════════════════════════════════════════════
   // READ
@@ -66,6 +69,24 @@ class TicketService {
       print('_byStatus($status) error: $e');
       return [];
     }
+  }
+
+  // ═══════════════════════════════════════════════
+  // REAL-TIME STREAMS
+  // ═══════════════════════════════════════════════
+
+  /// Live stream of verified tickets — used by TT Reviews queue.
+  Stream<List<Ticket>> streamVerifiedTickets() {
+    return _col
+        .where('status', isEqualTo: 'verified')
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return list;
+    });
   }
 
   // ═══════════════════════════════════════════════
@@ -150,7 +171,12 @@ class TicketService {
       });
 
       await Future.delayed(const Duration(milliseconds: 500));
-      return await getTicketById(ticketId);
+
+      final ticket = await getTicketById(ticketId);
+      if (ticket != null) {
+        await _notif.onTicketCreated(ticket);
+      }
+      return ticket;
     } catch (e) {
       print('createTicket error: $e');
       return null;
@@ -178,7 +204,7 @@ class TicketService {
   }
 
   // ═══════════════════════════════════════════════
-  // BUSINESS LOGIC
+  // BUSINESS LOGIC — with notifications
   // ═══════════════════════════════════════════════
 
   Future<void> assignToMe(
@@ -198,6 +224,11 @@ class TicketService {
       'verified_at': FieldValue.serverTimestamp(),
       'escalated_at': FieldValue.serverTimestamp(),
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onEscalatedToTT(fresh);
+    }
   }
 
   /// Auto-escalate: called when ADSB sends their first internal chat
@@ -221,6 +252,28 @@ class TicketService {
       'escalated_at': FieldValue.serverTimestamp(),
       'tt_notified_at': FieldValue.serverTimestamp(),
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onEscalatedToTT(fresh);
+    }
+  }
+
+  Future<void> markTTReviewed({
+    required String ticketId,
+    required String ttEmail,
+    required String ttName,
+  }) async {
+    await updateTicketFields(ticketId, {
+      'tt_advisor_email': ttEmail,
+      'tt_advisor_name': ttName,
+      'tt_solution_provided_at': FieldValue.serverTimestamp(),
+    });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onTTReplied(fresh);
+    }
   }
 
   Future<void> resolveRemotely(
@@ -232,15 +285,24 @@ class TicketService {
       'remote_fix_at': FieldValue.serverTimestamp(),
       'resolved_at': FieldValue.serverTimestamp(),
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onRemoteResolution(fresh);
+    }
   }
 
   /// Move a verified ticket into the on-site queue.
-  /// Called by ADSB after TT has advised and physical visit is needed.
   Future<void> sendToOnsiteQueue(String ticketId) async {
     await updateTicketFields(ticketId, {
       'status': 'pending_onsite',
       'tt_solution_provided_at': FieldValue.serverTimestamp(),
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onSentToOnsite(fresh);
+    }
   }
 
   Future<void> claimOnsiteJob({
@@ -254,6 +316,11 @@ class TicketService {
       'assigned_to_name': adsbName,
       'adsb_pickup_at': FieldValue.serverTimestamp(),
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onJobClaimed(fresh);
+    }
   }
 
   Future<void> completeOnSite({
@@ -283,18 +350,11 @@ class TicketService {
     }
 
     await updateTicketFields(ticketId, fields);
-  }
 
-  Future<void> markTTReviewed({
-    required String ticketId,
-    required String ttEmail,
-    required String ttName,
-  }) async {
-    await updateTicketFields(ticketId, {
-      'tt_advisor_email': ttEmail,
-      'tt_advisor_name': ttName,
-      'tt_solution_provided_at': FieldValue.serverTimestamp(),
-    });
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onJobCompleted(fresh);
+    }
   }
 
   Future<void> confirmResolution(String ticketId) async {
@@ -302,6 +362,11 @@ class TicketService {
       'status': 'closed',
       'client_confirmed_at': FieldValue.serverTimestamp(),
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onClientConfirmed(fresh);
+    }
   }
 
   Future<void> reopenTicket(String ticketId) async {
@@ -311,9 +376,19 @@ class TicketService {
       'assigned_to': null,
       'assigned_to_name': null,
     });
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onTicketReopened(fresh);
+    }
   }
 
   Future<void> cancelTicket(String ticketId) async {
     await updateTicketFields(ticketId, {'status': 'cancelled'});
+
+    final fresh = await getTicketById(ticketId);
+    if (fresh != null) {
+      await _notif.onTicketCancelled(fresh);
+    }
   }
 }
