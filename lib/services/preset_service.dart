@@ -4,10 +4,35 @@ class PresetService {
   final _col = FirebaseFirestore.instance.collection('presets');
 
   // ─── READ ───
+
   Future<List<String>> getProductTypes() => _getStringList('product_types');
-  Future<List<String>> getProductIssues() => _getStringList('product_issues');
   Future<List<String>> getRootCauses() => _getStringList('root_causes');
   Future<List<String>> getSolutions() => _getStringList('solutions');
+
+  /// Returns a map of product type → list of issues.
+  Future<Map<String, List<String>>> getProductIssues() async {
+    try {
+      final doc = await _col.doc('product_issues').get();
+      if (!doc.exists) return {};
+
+      final data = doc.data()!;
+      final items = data['items'];
+
+      if (items is! Map) return {};
+
+      final result = <String, List<String>>{};
+      items.forEach((key, value) {
+        if (value is List) {
+          result[key.toString()] =
+              value.map((e) => e.toString()).toList();
+        }
+      });
+      return result;
+    } catch (e) {
+      print('getProductIssues error: $e');
+      return {};
+    }
+  }
 
   Future<List<Map<String, String>>> getSites() async {
     try {
@@ -37,17 +62,28 @@ class PresetService {
   }
 
   // ─── WRITE ───
+
   Future<bool> saveProductTypes(List<String> items) =>
       _saveStringList('product_types', items);
-
-  Future<bool> saveProductIssues(List<String> items) =>
-      _saveStringList('product_issues', items);
 
   Future<bool> saveRootCauses(List<String> items) =>
       _saveStringList('root_causes', items);
 
   Future<bool> saveSolutions(List<String> items) =>
       _saveStringList('solutions', items);
+
+  Future<bool> saveProductIssues(Map<String, List<String>> items) async {
+    try {
+      await _col.doc('product_issues').set({
+        'items': items,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('saveProductIssues error: $e');
+      return false;
+    }
+  }
 
   Future<bool> saveSites(List<Map<String, String>> items) async {
     try {

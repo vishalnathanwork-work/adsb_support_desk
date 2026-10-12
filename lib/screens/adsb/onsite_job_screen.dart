@@ -7,6 +7,7 @@ import '../../services/ticket_service.dart';
 import '../../widgets/status_badge.dart';
 import 'adsb_chat_screen.dart';
 
+
 class OnsiteJobScreen extends StatefulWidget {
   final String ticketId;
   final UserModel user;
@@ -102,7 +103,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Job completed. Awaiting client confirmation.'),
+        content: Text('Job completed. Awaiting owner confirmation.'),
         backgroundColor: AppColors.success,
       ),
     );

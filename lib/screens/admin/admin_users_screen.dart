@@ -117,7 +117,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => UserFormSheet(
-        allowedRoles: const ['client', 'operator'],
+        allowedRoles: const ['owner', 'operator'],
         existingUser: userData,
       ),
     );
@@ -205,7 +205,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     _applyFilters();
                   });
                 }),
-                _chip('Clients', 'client', _filterRole, (v) {
+                _chip('Clients', 'owner', _filterRole, (v) {
                   setState(() {
                     _filterRole = v;
                     _applyFilters();
@@ -254,7 +254,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Widget _userCard(Map<String, dynamic> u) {
     final isActive = u['is_active'] ?? true;
-    final role = u['role'] ?? 'client';
+    final role = u['role'] ?? 'owner';
     final color = role == 'operator' ? AppColors.accent : AppColors.primary;
 
     return Container(
@@ -321,7 +321,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                _badge(role == 'client' ? 'Client' : 'Operator', color),
+                _badge(role == 'owner' ? 'Client' : 'Operator', color),
                 if ((u['company'] ?? '').toString().isNotEmpty) ...[
                   const SizedBox(width: 6),
                   Flexible(

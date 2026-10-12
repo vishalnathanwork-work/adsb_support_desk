@@ -96,7 +96,7 @@ class AuthService {
   Future<UserCredential?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // Web uses popup to avoid DWDS hangs and manual client ID config
+        // Web uses popup to avoid DWDS hangs and manual owner ID config
         GoogleAuthProvider authProvider = GoogleAuthProvider();
         return await _auth.signInWithPopup(authProvider);
       } else {

@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../config/theme.dart';
 import '../../../models/client_model.dart';
 import '../../../models/site_model.dart';
-import '../../../services/client_service.dart';
+import '../../../services/owner_service.dart';
 import '../../../services/site_service.dart';
 import '../../../services/user_service.dart';
 
@@ -44,7 +44,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
 
   bool get isEditMode => widget.existingUser != null;
   bool get isExternalRole =>
-      widget.allowedRoles.contains('client') ||
+      widget.allowedRoles.contains('owner') ||
           widget.allowedRoles.contains('operator');
   bool get requiresClient => isExternalRole;
 
@@ -126,7 +126,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
   Future<void> _saveEdit() async {
     if (!_formKey.currentState!.validate()) return;
     if (requiresClient && _selectedClient == null) {
-      _snack('Please select a client', AppColors.error);
+      _snack('Please select a owner', AppColors.error);
       return;
     }
     if (requiresClient && _selectedSiteIds.isEmpty) {
@@ -167,7 +167,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
   Future<void> _saveCreate() async {
     if (!_formKey.currentState!.validate()) return;
     if (requiresClient && _selectedClient == null) {
-      _snack('Please select a client', AppColors.error);
+      _snack('Please select a owner', AppColors.error);
       return;
     }
     if (requiresClient && _selectedSiteIds.isEmpty) {
@@ -345,7 +345,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
                   value: _selectedClient?.id,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    hintText: 'Select which client this user belongs to',
+                    hintText: 'Select which owner this user belongs to',
                     prefixIcon: Icon(Icons.business_outlined),
                   ),
                   items: _allClients.map((c) {
@@ -397,13 +397,13 @@ class _UserFormSheetState extends State<UserFormSheet> {
                 TextFormField(
                   controller: _companyController,
                   decoration: const InputDecoration(
-                    hintText: 'Auto-filled from selected client',
+                    hintText: 'Auto-filled from selected owner',
                     prefixIcon: Icon(Icons.apartment_outlined),
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Tip: leave blank to use the client name above.',
+                  'Tip: leave blank to use the owner name above.',
                   style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,
@@ -476,7 +476,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'This client has no sites. Add sites in Firebase Console first.',
+                'This owner has no sites. Add sites in Firebase Console first.',
                 style: TextStyle(fontSize: 13),
               ),
             ),
@@ -579,7 +579,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
 
   String _roleLabel(String role) {
     switch (role) {
-      case 'client':
+      case 'owner':
         return 'Client';
       case 'operator':
         return 'Operator';

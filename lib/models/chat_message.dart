@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class ChatMessage {
   final String id;
   final String ticketId;
-  final String channel; // 'ticket' | 'internal'
+  final String channel;
   final String senderEmail;
   final String senderName;
   final String senderRole;
@@ -22,6 +22,31 @@ class ChatMessage {
     this.isSystem = false,
     required this.sentAt,
   });
+
+  String get displayRole {
+    switch (senderRole) {
+      case 'client':         // ← backward compat
+      case 'owner':
+        return 'Site Owner';
+      case 'operator':
+        return 'Site Operator';
+      case 'adsb':
+      case 'technician':
+      case 'onsite':
+      case 'admin':
+        return 'ADSB Support';
+      case 'system':
+        return 'System';
+      default:
+        return 'User';
+    }
+  }
+
+  bool get isInternalSender =>
+      senderRole == 'adsb' ||
+          senderRole == 'technician' ||
+          senderRole == 'onsite' ||
+          senderRole == 'admin';
 
   Map<String, dynamic> toJson() => {
     'id': id,

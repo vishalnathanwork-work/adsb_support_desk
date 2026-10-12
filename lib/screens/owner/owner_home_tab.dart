@@ -6,6 +6,8 @@ import '../../services/ticket_service.dart';
 import 'create_ticket_screen.dart';
 import 'ticket_detail_screen.dart';
 
+typedef OwnerHomeTab = ClientHomeTab;
+
 class ClientHomeTab extends StatefulWidget {
   final UserModel user;
   final VoidCallback onLogout;

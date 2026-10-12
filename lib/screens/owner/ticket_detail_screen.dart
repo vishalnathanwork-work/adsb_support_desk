@@ -4,8 +4,9 @@ import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
+import '../../widgets/image_gallery.dart';
 import '../../widgets/status_badge.dart';
-import '../adsb/adsb_chat_screen.dart';         // ← reuse the same chat screen
+import '../adsb/adsb_chat_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final String ticketId;
@@ -49,7 +50,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         builder: (_) => AdsbChatScreen(
           ticketId: _ticket!.id,
           user: widget.user,
-          channel: 'ticket',
         ),
       ),
     );
@@ -120,6 +120,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
 
     final t = _ticket!;
+    final canChat = t.status != 'closed' && t.status != 'cancelled';
+    final isResolved = t.status == 'resolved';
 
     return Scaffold(
       appBar: AppBar(
@@ -136,7 +138,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header
+            // ─── Header card ───
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -181,19 +183,22 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 ],
               ),
             ),
+
             const SizedBox(height: 16),
 
-            // ─── CHAT BUTTON (visible during active handling) ───
-            if (t.isActive)
+            // ─── Chat button ───
+            if (canChat) ...[
               SizedBox(
                 height: 52,
                 child: ElevatedButton.icon(
                   onPressed: _openChat,
                   icon: const Icon(Icons.chat_bubble_outline),
                   label: const Text(
-                    'Chat with ADSB Team',
-                    style:
-                    TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    'Open Chat',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
@@ -204,28 +209,46 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
 
-            // Details
+            // ─── Details ───
             _section('Ticket Details'),
             _infoTile('Site', '${t.siteName} — ${t.siteLocation}'),
-            _infoTile('Contact', '${t.contactName} (${t.contactPhone})'),
+            _infoTile('Parking',
+                '${t.laneName} (${t.laneDirectionDisplay})'),
+            _infoTile('Contact',
+                '${t.contactName} (${t.contactPhone})'),
             _infoTile('Reported', DateFormatter.full(t.createdAt)),
-            _infoTile(
-              'Time to Resolve',
-              Ticket.formatDuration(t.totalResolutionTime),
-            ),
-            if (t.adsbPickupAt != null && t.workCompletedAt != null)
-              _infoTile(
-                'On-Site Duration',
-                Ticket.formatDuration(t.onsiteWorkDuration),
-              ),
             if (t.description.isNotEmpty)
               _infoTile('Description', t.description),
 
+            // ── Reported Photos ──
+            if (t.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _section('Reported Photos'),
+              const SizedBox(height: 8),
+              ImageGallery(
+                urls: t.imageUrls,
+                title: 'Reported Photos',
+              ),
+            ],
+
+            // ── Completion Evidence ──
+            if (t.completionImageUrl != null &&
+                t.completionImageUrl!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _section('Completion Evidence'),
+              const SizedBox(height: 8),
+              ImageGallery(
+                urls: [t.completionImageUrl!],
+                title: 'Completion Evidence',
+              ),
+            ],
+
             const SizedBox(height: 16),
 
-            // Resolution
+            // ─── Resolution ───
             if (t.resolvedAt != null) ...[
               _section('Resolution'),
               _infoTile('Root Cause', t.rootCause ?? '—'),
@@ -237,8 +260,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Confirmation actions
-            if (t.status == 'resolved') ...[
+            // ─── Confirmation actions ───
+            if (isResolved) ...[
               SizedBox(
                 height: 50,
                 child: ElevatedButton.icon(

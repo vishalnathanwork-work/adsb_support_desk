@@ -14,20 +14,34 @@ class NotificationService {
       final snapshot = await _col
           .where('user_email', isEqualTo: userEmail)
           .get();
-
       final list = snapshot.docs
           .map((doc) => AppNotification.fromJson({
         ...doc.data(),
         'id': doc.id,
       }))
           .toList();
-
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     } catch (e) {
       print('getMyNotifications error: $e');
       return [];
     }
+  }
+
+  Stream<List<AppNotification>> streamMyNotifications(String userEmail) {
+    return _col
+        .where('user_email', isEqualTo: userEmail)
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => AppNotification.fromJson({
+        ...doc.data(),
+        'id': doc.id,
+      }))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   Future<void> addNotification({
@@ -38,7 +52,6 @@ class NotificationService {
     required String type,
   }) async {
     if (userId.isEmpty) return;
-
     try {
       await _col.add({
         'user_email': userId,
@@ -63,7 +76,7 @@ class NotificationService {
   }
 
   // ═══════════════════════════════════════════════
-  // BROADCAST HELPERS
+  // HELPERS
   // ═══════════════════════════════════════════════
 
   Future<void> _notifyMany({
@@ -74,7 +87,6 @@ class NotificationService {
     required String type,
   }) async {
     final unique = emails.where((e) => e.isNotEmpty).toSet();
-
     await Future.wait(unique.map((email) => addNotification(
       userId: email,
       ticketId: ticketId,
@@ -91,7 +103,6 @@ class NotificationService {
           .where('role', isEqualTo: role)
           .where('is_active', isEqualTo: true)
           .get();
-
       return snap.docs.map((d) => d['email'] as String).toList();
     } catch (e) {
       print('_emailsByRole($role) error: $e');
@@ -99,41 +110,62 @@ class NotificationService {
     }
   }
 
-  Future<List<String>> _emailsByRoles(List<String> roles) async {
+  Future<List<String>> _getAdsbEmails() => _emailsByRole('adsb');
+  Future<List<String>> _getTTEmails() => _emailsByRole('technician');
+  Future<List<String>> _getOnsiteEmails() => _emailsByRole('onsite');
+  Future<List<String>> _getAdminEmails() => _emailsByRole('admin');
+
+  /// ADSB + TT + Admin — excludes on-site.
+  Future<List<String>> _getSupportEmails() async {
+    final results = await Future.wait([
+      _getAdsbEmails(),
+      _getTTEmails(),
+      _getAdminEmails(),
+    ]);
+    return results.expand((e) => e).toList();
+  }
+
+  /// Every active user with this site in their site_ids.
+  /// Includes the owner(s) and operator(s) of the site.
+  Future<List<String>> _getSiteStakeholderEmails(String siteId) async {
+    if (siteId.isEmpty) return [];
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .where('role', whereIn: roles)
+          .where('site_ids', arrayContains: siteId)
           .where('is_active', isEqualTo: true)
           .get();
-
       return snap.docs.map((d) => d['email'] as String).toList();
     } catch (e) {
-      print('_emailsByRoles($roles) error: $e');
+      print('_getSiteStakeholderEmails error: $e');
       return [];
     }
   }
 
-  Future<List<String>> _getInternalEmails() =>
-      _emailsByRoles(['adsb', 'onsite', 'admin']);
-
-  Future<List<String>> _getTTEmails() => _emailsByRole('technician');
-
-  Future<List<String>> _getOnsiteEmails() => _emailsByRole('onsite');
-
-  Future<List<String>> _getAdsbEmails() => _emailsByRole('adsb');
-
   // ═══════════════════════════════════════════════
-  // HIGH-LEVEL EVENT METHODS
+  // HIGH-LEVEL EVENTS
   // ═══════════════════════════════════════════════
 
-  /// Ticket created → notify creator + all ADSB support.
+  /// Ticket created. Notifies:
+  /// - Reporter (confirmation)
+  /// - All other site stakeholders (owner ↔ operator cross-notify)
+  /// - All ADSB support
   Future<void> onTicketCreated(Ticket ticket) async {
     await addNotification(
       userId: ticket.createdBy,
       ticketId: ticket.id,
       title: 'Ticket Submitted',
       body: 'Your ticket ${ticket.id} has been received.',
+      type: 'status_update',
+    );
+
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails.where((e) => e != ticket.createdBy).toList(),
+      ticketId: ticket.id,
+      title: 'New Issue Reported',
+      body:
+      '${ticket.createdByName} reported an issue at ${ticket.siteName}.',
       type: 'status_update',
     );
 
@@ -148,13 +180,15 @@ class NotificationService {
     );
   }
 
-  /// ADSB escalated to TT (first internal message sent).
+  /// Escalated to TT.
+  /// Notifies: site stakeholders + all TT advisors.
   Future<void> onEscalatedToTT(Ticket ticket) async {
-    await addNotification(
-      userId: ticket.createdBy,
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
       ticketId: ticket.id,
       title: 'Issue Being Reviewed',
-      body: 'Our team is reviewing your issue.',
+      body: '${ticket.id} is being reviewed by the ADSB team.',
       type: 'status_update',
     );
 
@@ -169,25 +203,38 @@ class NotificationService {
     );
   }
 
-  /// TT replied with advice.
+  /// TT replied.
+  /// Notifies: site stakeholders + ADSB + TT + Admin (not on-site).
   Future<void> onTTReplied(Ticket ticket) async {
-    final internalEmails = await _getInternalEmails();
+    // Site stakeholders get an update — TT was consulted
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
     await _notifyMany(
-      emails: internalEmails,
+      emails: siteEmails,
+      ticketId: ticket.id,
+      title: 'Issue Update',
+      body: 'The ADSB team has an update on ${ticket.id}.',
+      type: 'status_update',
+    );
+
+    final supportEmails = await _getSupportEmails();
+    await _notifyMany(
+      emails: supportEmails,
       ticketId: ticket.id,
       title: 'TT Advice Received',
-      body: 'TT has replied on ${ticket.id}. Open the internal chat to view.',
+      body: 'TT has replied on ${ticket.id}.',
       type: 'status_update',
     );
   }
 
-  /// ADSB sent ticket to on-site queue.
+  /// Sent to on-site.
+  /// Notifies: site stakeholders + on-site team + ADSB + TT.
   Future<void> onSentToOnsite(Ticket ticket) async {
-    await addNotification(
-      userId: ticket.createdBy,
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
       ticketId: ticket.id,
       title: 'On-Site Visit Scheduled',
-      body: 'Our team will attend your site shortly.',
+      body: 'Our team will attend ${ticket.siteName} shortly.',
       type: 'schedule',
     );
 
@@ -220,10 +267,12 @@ class NotificationService {
     );
   }
 
-  /// On-site technician claimed the job.
+  /// Job claimed.
+  /// Notifies: site stakeholders + ADSB.
   Future<void> onJobClaimed(Ticket ticket) async {
-    await addNotification(
-      userId: ticket.createdBy,
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
       ticketId: ticket.id,
       title: 'Technician On The Way',
       body: 'A technician has been assigned to ${ticket.id}.',
@@ -241,13 +290,15 @@ class NotificationService {
     );
   }
 
-  /// On-site technician completed the work.
+  /// Job completed (on-site).
+  /// Notifies: site stakeholders + ADSB + TT.
   Future<void> onJobCompleted(Ticket ticket) async {
-    await addNotification(
-      userId: ticket.createdBy,
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
       ticketId: ticket.id,
       title: 'Issue Resolved',
-      body: 'Your issue has been resolved. Please confirm.',
+      body: '${ticket.id} has been resolved. Please confirm.',
       type: 'resolved',
     );
 
@@ -270,13 +321,15 @@ class NotificationService {
     );
   }
 
-  /// ADSB resolved remotely.
+  /// Resolved remotely.
+  /// Notifies: site stakeholders + TT.
   Future<void> onRemoteResolution(Ticket ticket) async {
-    await addNotification(
-      userId: ticket.createdBy,
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
       ticketId: ticket.id,
       title: 'Ticket Resolved',
-      body: 'Your issue was resolved remotely. Please confirm.',
+      body: '${ticket.id} was resolved remotely. Please confirm.',
       type: 'resolved',
     );
 
@@ -290,47 +343,68 @@ class NotificationService {
     );
   }
 
-  /// Client confirmed resolution.
+  /// Client confirmed / closed.
+  /// Notifies: site stakeholders + ADSB + TT + Admin.
   Future<void> onClientConfirmed(Ticket ticket) async {
-    final internalEmails = await _getInternalEmails();
+    final supportEmails = await _getSupportEmails();
     await _notifyMany(
-      emails: internalEmails,
+      emails: supportEmails,
       ticketId: ticket.id,
       title: 'Ticket Closed',
-      body: '${ticket.id} has been confirmed and closed by the client.',
+      body: '${ticket.id} has been confirmed and closed.',
       type: 'status_update',
     );
 
-    final ttEmails = await _getTTEmails();
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
     await _notifyMany(
-      emails: ttEmails,
+      emails: siteEmails,
       ticketId: ticket.id,
       title: 'Ticket Closed',
-      body: '${ticket.id} has been closed.',
+      body: '${ticket.id} is now closed.',
       type: 'status_update',
     );
   }
 
-  /// Client reopened the ticket.
+  /// Reopened.
+  /// Notifies: site stakeholders + ADSB.
   Future<void> onTicketReopened(Ticket ticket) async {
     final adsbEmails = await _getAdsbEmails();
     await _notifyMany(
       emails: adsbEmails,
       ticketId: ticket.id,
       title: 'Ticket Reopened',
-      body: 'Client reopened ${ticket.id}. It is back in your queue.',
+      body: '${ticket.id} was reopened. It is back in your queue.',
+      type: 'status_update',
+    );
+
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
+      ticketId: ticket.id,
+      title: 'Ticket Reopened',
+      body: 'Ticket ${ticket.id} has been reopened.',
       type: 'status_update',
     );
   }
 
-  /// Ticket was cancelled by client.
+  /// Cancelled.
+  /// Notifies: site stakeholders + ADSB.
   Future<void> onTicketCancelled(Ticket ticket) async {
     final adsbEmails = await _getAdsbEmails();
     await _notifyMany(
       emails: adsbEmails,
       ticketId: ticket.id,
       title: 'Ticket Cancelled',
-      body: 'Client cancelled ${ticket.id}.',
+      body: '${ticket.id} was cancelled by the site team.',
+      type: 'status_update',
+    );
+
+    final siteEmails = await _getSiteStakeholderEmails(ticket.siteId);
+    await _notifyMany(
+      emails: siteEmails,
+      ticketId: ticket.id,
+      title: 'Ticket Cancelled',
+      body: 'Ticket ${ticket.id} has been cancelled.',
       type: 'status_update',
     );
   }

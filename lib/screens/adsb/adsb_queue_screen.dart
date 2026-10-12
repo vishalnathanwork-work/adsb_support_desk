@@ -21,7 +21,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   final _service = TicketService();
   List<Ticket> _tickets = [];
   bool _isLoading = true;
-  String _filter = 'active'; // 'active' | 'all'
+  String _filter = 'active';
 
   @override
   void initState() {
@@ -32,34 +32,44 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   Future<void> _load() async {
     setState(() => _isLoading = true);
 
-    // Load both pending (new) and verified (in progress with TT)
-    final pending = await _service.getPendingTickets();
-    final verified = await _service.getVerifiedTickets();
-
-    final combined = [...pending, ...verified];
-
-    // Sort: oldest first (FIFO queue)
-    combined.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final list = await _service.getActiveTickets();
 
     if (!mounted) return;
     setState(() {
-      _tickets = combined;
+      _tickets = list;
       _isLoading = false;
     });
   }
 
   List<Ticket> get _filtered {
-    if (_filter == 'active') {
-      // Active = anything ADSB still owns
-      return _tickets
-          .where((t) => t.status == 'pending' || t.status == 'verified')
-          .toList();
+    switch (_filter) {
+      case 'pending':
+        return _tickets.where((t) => t.status == 'pending').toList();
+      case 'with_tt':
+        return _tickets.where((t) => t.status == 'verified').toList();
+      case 'onsite':
+        return _tickets
+            .where((t) =>
+        t.status == 'pending_onsite' ||
+            t.status == 'in_progress')
+            .toList();
+      case 'active':
+      default:
+        return _tickets;
     }
-    return _tickets;
   }
 
   @override
   Widget build(BuildContext context) {
+    final pendingCount =
+        _tickets.where((t) => t.status == 'pending').length;
+    final withTtCount =
+        _tickets.where((t) => t.status == 'verified').length;
+    final onsiteCount = _tickets
+        .where((t) =>
+    t.status == 'pending_onsite' || t.status == 'in_progress')
+        .length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Verification Queue'),
@@ -72,25 +82,23 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
       ),
       body: Column(
         children: [
-          // ── Filter row ──
           Container(
             padding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
-            child: Row(
-              children: [
-                _filterChip('Active', 'active'),
-                const SizedBox(width: 8),
-                _filterChip('All', 'all'),
-                const Spacer(),
-                Text(
-                  '${_filtered.length} ticket${_filtered.length == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip('All Active', 'active', null),
+                  const SizedBox(width: 8),
+                  _filterChip('Pending', 'pending', pendingCount),
+                  const SizedBox(width: 8),
+                  _filterChip('With TT', 'with_tt', withTtCount),
+                  const SizedBox(width: 8),
+                  _filterChip('On-Site', 'onsite', onsiteCount),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -117,10 +125,12 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
     );
   }
 
-  Widget _filterChip(String label, String value) {
+  Widget _filterChip(String label, String value, int? count) {
     final selected = _filter == value;
+    final display = count == null ? label : '$label ($count)';
+
     return ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
+      label: Text(display, style: const TextStyle(fontSize: 12)),
       selected: selected,
       onSelected: (_) => setState(() => _filter = value),
       selectedColor: AppColors.primary.withOpacity(0.15),
@@ -128,7 +138,21 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   }
 
   Widget _ticketTile(Ticket t) {
-    final isVerified = t.status == 'verified';
+    final isWithTT = t.status == 'verified';
+    final isOnsite = t.status == 'pending_onsite' || t.status == 'in_progress';
+    final isResolved = t.status == 'resolved';
+    final isPending = t.status == 'pending';
+
+    Color borderColor;
+    if (isWithTT) {
+      borderColor = const Color(0xFF5E35B1).withOpacity(0.4);
+    } else if (isOnsite) {
+      borderColor = AppColors.primary.withOpacity(0.4);
+    } else if (isResolved) {
+      borderColor = AppColors.success.withOpacity(0.4);
+    } else {
+      borderColor = AppColors.divider;
+    }
 
     return InkWell(
       onTap: () async {
@@ -151,12 +175,8 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isVerified
-                ? const Color(0xFF5E35B1).withOpacity(0.4)
-                : (t.isBeingVerified
-                ? AppColors.accent.withOpacity(0.4)
-                : AppColors.divider),
-            width: isVerified || t.isBeingVerified ? 2 : 1,
+            color: borderColor,
+            width: isWithTT || isOnsite || isResolved ? 2 : 1,
           ),
         ),
         child: Column(
@@ -174,24 +194,13 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                     ),
                   ),
                 ),
-                if (isVerified)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5E35B1).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'WITH TT',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF5E35B1),
-                      ),
-                    ),
-                  ),
+                if (isWithTT)
+                  _badge('WITH TT', const Color(0xFF5E35B1))
+                else if (isOnsite)
+                  _badge('ON-SITE', AppColors.primary)
+                else if (isResolved)
+                    _badge('RESOLVED', AppColors.success),
+                const SizedBox(width: 6),
                 StatusBadge(status: t.status),
               ],
             ),
@@ -236,36 +245,25 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ),
               ],
             ),
-            if (isVerified && t.escalationReason != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5E35B1).withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.lock_outline,
-                        size: 12, color: Color(0xFF5E35B1)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Escalated to TT — chat internally to continue',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF5E35B1),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
         ),
       ),
     );

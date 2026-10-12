@@ -4,7 +4,7 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
-import '../client/client_profile_tab.dart';
+import '../owner/owner_profile_tab.dart';
 import '../main_navigation.dart';
 import 'onsite_queue_screen.dart';
 
@@ -62,6 +62,7 @@ class _OnsiteDashboardState extends State<OnsiteDashboard> {
           icon: Icons.work_outline,
           page: OnsiteQueueScreen(user: widget.user),
         ),
+
         NavTab(
           label: 'Profile',
           icon: Icons.person_outline,

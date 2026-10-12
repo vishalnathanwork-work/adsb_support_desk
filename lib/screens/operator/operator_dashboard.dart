@@ -1,56 +1,115 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
-import '../../services/notification_listener.dart';
-import '../../services/session_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_service.dart';
+import '../../services/ticket_service.dart';
+import '../common/ticket_history_screen.dart';
+import '../owner/create_ticket_screen.dart';
+import '../owner/owner_profile_tab.dart';
+import '../owner/owner_tickets_tab.dart';
+import '../owner/notifications_screen.dart';
 import '../main_navigation.dart';
-import '../client/client_home_tab.dart';
-import '../client/client_tickets_tab.dart';
-import '../client/client_profile_tab.dart';
-import '../client/notifications_screen.dart';
-import 'operator_sites_screen.dart';
 
-class OperatorDashboard extends StatelessWidget {
+class OperatorDashboard extends StatefulWidget {
   final UserModel user;
-  final _authService = AuthService();
 
-  OperatorDashboard({super.key, required this.user});
+  const OperatorDashboard({super.key, required this.user});
+
+  @override
+  State<OperatorDashboard> createState() => _OperatorDashboardState();
+}
+
+class _OperatorDashboardState extends State<OperatorDashboard> {
+  int _activeCount = 0;
+  int _pendingCount = 0;
+  int _resolvedCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final service = TicketService();
+
+    List siteTickets = [];
+    if (widget.user.siteIds.isNotEmpty) {
+      siteTickets = await service.getActiveTicketsForSites(widget.user.siteIds);
+    }
+
+    final allTickets = widget.user.siteIds.isNotEmpty
+        ? await service.getTicketsForSites(widget.user.siteIds)
+        : [];
+
+    if (!mounted) return;
+    setState(() {
+      _activeCount = siteTickets
+          .where((t) =>
+      t.status != 'resolved' &&
+          t.status != 'closed' &&
+          t.status != 'cancelled')
+          .length;
+      _pendingCount =
+          siteTickets.where((t) => t.status == 'pending').length;
+      _resolvedCount = allTickets
+          .where((t) => t.status == 'resolved' || t.status == 'closed')
+          .length;
+    });
+  }
+
+  Future<void> _logout() async {
+    await SessionService().clear();
+    await AuthService().logout();
+    if (mounted) {
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil('/login', (r) => false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MainNavigation(
-      user: user,
+      user: widget.user,
       tabs: [
         NavTab(
           label: 'Home',
           icon: Icons.home_outlined,
-          page: _OperatorHome(user: user),
+          page: _OperatorHome(
+            user: widget.user,
+            activeCount: _activeCount,
+            pendingCount: _pendingCount,
+            resolvedCount: _resolvedCount,
+            onRefresh: _loadStats,
+            onLogout: _logout,
+          ),
         ),
         NavTab(
           label: 'Tickets',
           icon: Icons.confirmation_number_outlined,
-          page: ClientTicketsTab(user: user),
+          page: OwnerTicketsTab(user: widget.user),
         ),
         NavTab(
           label: 'Alerts',
           icon: Icons.notifications_outlined,
-          page: NotificationsScreen(user: user),
+          page: NotificationsScreen(user: widget.user),
+        ),
+        NavTab(
+          label: 'History',
+          icon: Icons.history,
+          page: TicketHistoryScreen(
+            user: widget.user,
+            title: 'Ticket History',
+            loader: () => TicketService().getHistoryForSites(widget.user.siteIds),
+          ),
         ),
         NavTab(
           label: 'Profile',
           icon: Icons.person_outline,
-          page: ClientProfileTab(
-            user: user,
-            onLogout: () async {
-              AppNotificationListener().stop();
-              await SessionService().clear();
-              await _authService.logout();
-              if (context.mounted) {
-                Navigator.of(context)
-                    .pushNamedAndRemoveUntil('/login', (r) => false);
-              }
-            },
+          page: OwnerProfileTab(
+            user: widget.user,
+            onLogout: _logout,
           ),
         ),
       ],
@@ -60,155 +119,238 @@ class OperatorDashboard extends StatelessWidget {
 
 class _OperatorHome extends StatelessWidget {
   final UserModel user;
+  final int activeCount;
+  final int pendingCount;
+  final int resolvedCount;
+  final VoidCallback onRefresh;
+  final VoidCallback onLogout;
 
-  const _OperatorHome({required this.user});
+  const _OperatorHome({
+    required this.user,
+    required this.activeCount,
+    required this.pendingCount,
+    required this.resolvedCount,
+    required this.onRefresh,
+    required this.onLogout,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Operator Dashboard'),
+        title: const Text('Operator'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: onRefresh,
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await SessionService().clear();
-              final authService = AuthService();
-              await authService.logout();
-              if (context.mounted) {
-                Navigator.of(context)
-                    .pushNamedAndRemoveUntil('/login', (r) => false);
-              }
-            },
+            onPressed: onLogout,
           ),
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Welcome card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00838F), Color(0xFF006064)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        child: RefreshIndicator(
+          onRefresh: () async => onRefresh(),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ─── Welcome card ───
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF00838F), Color(0xFF006064)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Welcome back,',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if ((user.company ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        user.company!,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+              const SizedBox(height: 24),
+
+              // ─── Stats ───
+              const Text(
+                'Ticket Overview',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  const Text('Operator Account',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(user.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(user.company ?? 'Parken Sdn Bhd',
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 12)),
+                  Expanded(
+                    child: _statCard(
+                      label: 'Active',
+                      value: '$activeCount',
+                      icon: Icons.sync,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _statCard(
+                      label: 'Pending',
+                      value: '$pendingCount',
+                      icon: Icons.pending_outlined,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _statCard(
+                      label: 'Resolved',
+                      value: '$resolvedCount',
+                      icon: Icons.check_circle_outline,
+                      color: AppColors.success,
+                    ),
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
 
-            // Quick create ticket button
-            SizedBox(
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  await Navigator.push(
+              const SizedBox(height: 28),
+
+              // ─── Quick actions ───
+              const Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _actionTile(
+                context,
+                Icons.confirmation_number_outlined,
+                'My Tickets',
+                'View and manage all tickets at your site',
+                AppColors.primary,
+                    () {
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ClientHomeTab(
-                        user: user,
-                        onLogout: () {},
-                      ),
+                      builder: (_) => OwnerTicketsTab(user: user),
                     ),
                   );
                 },
-                icon: const Icon(Icons.add),
-                label: const Text(
-                  'Create Ticket for Client',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Tools
-            const Text('Operator Tools',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            _toolTile(
-              context,
-              Icons.add_circle_outline,
-              'Create Ticket for Client',
-              'Submit on behalf of the client',
-              AppColors.primary,
-              () => Navigator.push(
+              _actionTile(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ClientHomeTab(
-                    user: user,
-                    onLogout: () {},
-                  ),
-                ),
+                Icons.add_circle_outline,
+                'Create Ticket',
+                'Create a new ticket for your site',
+                AppColors.accent,
+                    () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateTicketScreen(user: user),   // ← RIGHT
+                    ),
+                  );
+                },
               ),
-            ),
-            _toolTile(
-              context,
-              Icons.list_alt_outlined,
-              'My Tickets',
-              'Tickets you have submitted',
-              AppColors.accent,
-              () => Navigator.push(
+              _actionTile(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ClientTicketsTab(user: user),
-                ),
+                Icons.notifications_outlined,
+                'Notifications',
+                'Check your alerts',
+                AppColors.warning,
+                    () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NotificationsScreen(user: user),
+                    ),
+                  );
+                },
               ),
-            ),
-            _toolTile(
-              context,
-              Icons.location_city_outlined,
-              'Sites Under My Care',
-              'View all your site locations',
-              AppColors.warning,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => OperatorSitesScreen(user: user),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _toolTile(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String subtitle,
-    Color color,
-    VoidCallback onTap,
-  ) {
+  Widget _statCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionTile(
+      BuildContext context,
+      IconData icon,
+      String title,
+      String subtitle,
+      Color color,
+      VoidCallback onTap,
+      ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -236,13 +378,21 @@ class _OperatorHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),

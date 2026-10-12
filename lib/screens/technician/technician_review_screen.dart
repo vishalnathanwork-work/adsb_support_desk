@@ -3,9 +3,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
-import '../../services/notification_service.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
+import '../../widgets/image_gallery.dart';
 import '../../widgets/status_badge.dart';
 import '../adsb/adsb_chat_screen.dart';
 
@@ -26,7 +26,6 @@ class TechnicianReviewScreen extends StatefulWidget {
 
 class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
   final _service = TicketService();
-  final _notifService = NotificationService();
   Ticket? _ticket;
   bool _isLoading = true;
   bool _markedReviewed = false;
@@ -46,11 +45,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     });
   }
 
-  // ─────────────────────────────────────────
-  // ACTIONS
-  // ─────────────────────────────────────────
-
-  Future<void> _openInternalChat() async {
+  Future<void> _openChat() async {
     if (_ticket == null) return;
     await Navigator.push(
       context,
@@ -58,7 +53,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
         builder: (_) => AdsbChatScreen(
           ticketId: _ticket!.id,
           user: widget.user,
-          channel: 'internal',
         ),
       ),
     );
@@ -86,9 +80,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
       builder: (_) => AlertDialog(
         title: const Text('Mark review complete?'),
         content: const Text(
-          'This confirms you have finished advising on this ticket. '
-              'The ADSB team will decide whether to resolve remotely or send on-site.',
-        ),
+            'This confirms you have finished advising. The ADSB team will decide next steps.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -96,9 +88,8 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.success,
-            ),
+            style:
+            TextButton.styleFrom(foregroundColor: AppColors.success),
             child: const Text('Mark Complete'),
           ),
         ],
@@ -112,16 +103,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
       ttName: widget.user.name,
     );
 
-    if (_ticket != null) {
-      await _notifService.addNotification(
-        userId: _ticket!.assignedTo ?? 'adsb@adsb.com',
-        ticketId: _ticket!.id,
-        title: 'TT Review Complete',
-        body: 'TT has provided their advice on ${_ticket!.id}.',
-        type: 'status_update',
-      );
-    }
-
     if (!mounted) return;
     setState(() => _markedReviewed = true);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -131,10 +112,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
       ),
     );
   }
-
-  // ─────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +134,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(t.id),
-        backgroundColor: const Color(0xFF5E35B1),
         actions: [
           IconButton(
             icon: const Icon(Icons.phone_in_talk_outlined),
@@ -172,6 +148,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
           children: [
             _escalationBanner(t),
             const SizedBox(height: 16),
+
             _card(
               title: 'Ticket Details',
               children: [
@@ -190,88 +167,93 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _row('Client', t.createdByName),
+                _row('Reported by', t.createdByName),
                 _row('Contact', '${t.contactName} — ${t.contactPhone}'),
                 _row('Site', t.siteName),
                 _row('Location', t.siteLocation),
-                _row(
-                  'Parking',
-                  '${t.laneName} (${t.laneDirectionDisplay})',
-                ),
+                _row('Parking',
+                    '${t.laneName} (${t.laneDirectionDisplay})'),
                 _row('Product', t.productType),
                 _row('Issue', t.productIssue),
                 if (t.description.isNotEmpty)
                   _row('Description', t.description),
-                _row('Reported', DateFormatter.full(t.createdAt)),
+                _row('Reported at', DateFormatter.full(t.createdAt)),
+
+                // ── Reported photos ──
+                if (t.imageUrls.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Reported Photos',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ImageGallery(
+                    urls: t.imageUrls,
+                    title: 'Reported Photos',
+                  ),
+                ],
+
+                // ── Completion evidence ──
+                if (t.completionImageUrl != null &&
+                    t.completionImageUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Completion Evidence',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ImageGallery(
+                    urls: [t.completionImageUrl!],
+                    title: 'Completion Evidence',
+                  ),
+                ],
               ],
             ),
             if (t.escalationReason != null) ...[
               const SizedBox(height: 12),
               _card(
-                title: 'Reason for Escalation',
+                title: 'Reason for Review',
                 children: [
-                  Text(
-                    t.escalationReason!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.5,
-                    ),
-                  ),
-                  if (t.assignedToName != null) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.person_outline,
-                          size: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Escalated by ${t.assignedToName}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  Text(t.escalationReason!,
+                      style: const TextStyle(fontSize: 13, height: 1.5)),
                 ],
               ),
             ],
+
             const SizedBox(height: 20),
-            const Text(
-              'Discuss with ADSB',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+
+            const Text('Ticket Chat',
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             const Text(
-              'Chat internally with the ADSB agent who escalated this ticket. '
-                  'Your messages are private — clients never see them.',
+              'Chat with the site team and ADSB. The client sees you as ADSB Team.',
               style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+                  fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 12),
             SizedBox(
               height: 60,
               child: ElevatedButton.icon(
-                onPressed: _openInternalChat,
+                onPressed: _openChat,
                 icon: const Icon(Icons.chat_bubble_outline, size: 22),
-                label: const Text(
-                  'Open Internal Chat',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                label: const Text('Open Chat',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5E35B1),
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -279,6 +261,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 12),
             SizedBox(
               height: 52,
@@ -286,26 +269,22 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
               child: OutlinedButton.icon(
                 onPressed: _callAdsbAgent,
                 icon: const Icon(Icons.phone_in_talk_outlined, size: 20),
-                label: const Text(
-                  'Call ADSB Agent',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                label: const Text('Call ADSB Agent',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(
-                    color: AppColors.primary,
-                    width: 2,
-                  ),
+                      color: AppColors.primary, width: 2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
             ),
+
             const SizedBox(height: 24),
+
             if (alreadyReviewed) ...[
               Container(
                 padding: const EdgeInsets.all(14),
@@ -313,25 +292,20 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                   color: AppColors.success.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.success.withOpacity(0.3),
-                  ),
+                      color: AppColors.success.withOpacity(0.3)),
                 ),
                 child: const Row(
                   children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      color: AppColors.success,
-                      size: 20,
-                    ),
+                    Icon(Icons.check_circle_outline,
+                        color: AppColors.success, size: 20),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Review marked complete. ADSB has been notified.',
                         style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
+                            fontSize: 12,
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -344,16 +318,11 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                 child: TextButton.icon(
                   onPressed: _markReviewed,
                   icon: const Icon(Icons.done_all, size: 18),
-                  label: const Text(
-                    'Mark Review Complete',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  label: const Text('Mark Review Complete',
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
-                    foregroundColor: AppColors.success,
-                  ),
+                      foregroundColor: AppColors.success),
                 ),
               ),
               const SizedBox(height: 6),
@@ -361,10 +330,9 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                 child: Text(
                   'Use this after providing your advice',
                   style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                    fontStyle: FontStyle.italic,
-                  ),
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      fontStyle: FontStyle.italic),
                 ),
               ),
             ],
@@ -373,10 +341,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
       ),
     );
   }
-
-  // ─────────────────────────────────────────
-  // HELPERS
-  // ─────────────────────────────────────────
 
   Widget _escalationBanner(Ticket t) {
     return Container(
@@ -396,33 +360,26 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.arrow_upward,
-              color: Colors.white,
-              size: 22,
-            ),
+            child: const Icon(Icons.support_agent,
+                color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Escalated by ADSB',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                const Text('Ticket for review',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(
-                  t.assignedToName ?? 'ADSB Support',
+                  t.createdByName,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -432,10 +389,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     );
   }
 
-  Widget _card({
-    required String title,
-    required List<Widget> children,
-  }) {
+  Widget _card({required String title, required List<Widget> children}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -446,14 +400,11 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF5E35B1),
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary)),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -468,23 +419,15 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
+            width: 100,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary)),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            child: Text(value,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w500)),
           ),
         ],
       ),

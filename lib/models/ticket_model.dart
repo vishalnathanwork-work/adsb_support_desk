@@ -13,25 +13,34 @@ class Ticket {
 
   // Lane (parking label + user-chosen direction)
   final String laneId;
-  final String laneName;       // "P1"
-  final String laneDirection;  // "entry" | "exit"
+  final String laneName;
+  final String laneDirection; // "entry" | "exit" | "both"
 
   final String productType;
   final String productIssue;
   final String contactName;
   final String contactPhone;
   final String description;
-  final List<String> imageUrls;
+
+  // ─── Images ───
+  final List<String> imageUrls;              // reporter's photos
+  final String? completionImageUrl;          // on-site completion evidence
+
   final String status;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? rootCause;
   final String? solutionApplied;
   final String? resolutionNotes;
-  final String? escalationReason;
   final DateTime? resolvedAt;
   final String? assignedTo;
   final String? assignedToName;
+
+  // ─── Escalation / TT fields ───
+  final String? escalationReason;
+  final String? ttAdvisorEmail;
+  final String? ttAdvisorName;
+  final DateTime? ttReviewStartedAt;
 
   // ─── Timestamp Logs ───
   final DateTime? adsbNotifiedAt;
@@ -52,6 +61,8 @@ class Ticket {
   final DateTime? autoClosedAt;
   final DateTime? noShowAt;
   final DateTime? escalatedAt;
+  final DateTime? cancelledAt;
+
 
   Ticket({
     required this.id,
@@ -70,16 +81,20 @@ class Ticket {
     required this.contactPhone,
     required this.description,
     required this.imageUrls,
+    this.completionImageUrl,
     required this.status,
     required this.createdAt,
     required this.updatedAt,
     this.rootCause,
     this.solutionApplied,
     this.resolutionNotes,
-    this.escalationReason,
     this.resolvedAt,
     this.assignedTo,
     this.assignedToName,
+    this.escalationReason,
+    this.ttAdvisorEmail,
+    this.ttAdvisorName,
+    this.ttReviewStartedAt,
     this.adsbNotifiedAt,
     this.callStartedAt,
     this.callEndedAt,
@@ -98,6 +113,8 @@ class Ticket {
     this.autoClosedAt,
     this.noShowAt,
     this.escalatedAt,
+    this.cancelledAt,
+
   });
 
   static DateTime? _ts(dynamic value) {
@@ -134,7 +151,10 @@ class Ticket {
     contactName: json['contact_name'] ?? '',
     contactPhone: json['contact_phone'] ?? '',
     description: json['description'] ?? '',
+
     imageUrls: _stringList(json['image_urls']),
+    completionImageUrl: json['completion_image_url'],
+
     status: json['status'] ?? 'pending',
     createdAt: _ts(json['created_at']) ?? DateTime.now(),
     updatedAt: _ts(json['updated_at']) ?? DateTime.now(),
@@ -143,8 +163,15 @@ class Ticket {
     rootCause: json['root_cause'],
     solutionApplied: json['solution_applied'],
     resolutionNotes: json['resolution_notes'],
-    escalationReason: json['escalation_reason'],
     resolvedAt: _ts(json['resolved_at']),
+
+    // ─── Escalation / TT ───
+    escalationReason: json['escalation_reason'],
+    ttAdvisorEmail: json['tt_advisor_email'],
+    ttAdvisorName: json['tt_advisor_name'],
+    ttReviewStartedAt: _ts(json['tt_review_started_at']),
+
+    // ─── Timestamp Logs ───
     adsbNotifiedAt: _ts(json['adsb_notified_at']),
     callStartedAt: _ts(json['call_started_at']),
     callEndedAt: _ts(json['call_ended_at']),
@@ -163,6 +190,8 @@ class Ticket {
     autoClosedAt: _ts(json['auto_closed_at']),
     noShowAt: _ts(json['no_show_at']),
     escalatedAt: _ts(json['escalated_at']),
+    cancelledAt: _ts(json['cancelled_at']),
+
   );
 
   Ticket copyWith({
@@ -170,11 +199,16 @@ class Ticket {
     String? rootCause,
     String? solutionApplied,
     String? resolutionNotes,
-    String? escalationReason,
     String? assignedTo,
     String? assignedToName,
+    String? escalationReason,
+    String? ttAdvisorEmail,
+    String? ttAdvisorName,
+    DateTime? ttReviewStartedAt,
     DateTime? resolvedAt,
     DateTime? updatedAt,
+    List<String>? imageUrls,
+    String? completionImageUrl,
   }) =>
       Ticket(
         id: id,
@@ -192,17 +226,22 @@ class Ticket {
         contactName: contactName,
         contactPhone: contactPhone,
         description: description,
-        imageUrls: imageUrls,
+        imageUrls: imageUrls ?? this.imageUrls,
+        completionImageUrl:
+        completionImageUrl ?? this.completionImageUrl,
         status: status ?? this.status,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         rootCause: rootCause ?? this.rootCause,
         solutionApplied: solutionApplied ?? this.solutionApplied,
         resolutionNotes: resolutionNotes ?? this.resolutionNotes,
-        escalationReason: escalationReason ?? this.escalationReason,
         resolvedAt: resolvedAt ?? this.resolvedAt,
         assignedTo: assignedTo ?? this.assignedTo,
         assignedToName: assignedToName ?? this.assignedToName,
+        escalationReason: escalationReason ?? this.escalationReason,
+        ttAdvisorEmail: ttAdvisorEmail ?? this.ttAdvisorEmail,
+        ttAdvisorName: ttAdvisorName ?? this.ttAdvisorName,
+        ttReviewStartedAt: ttReviewStartedAt ?? this.ttReviewStartedAt,
         adsbNotifiedAt: adsbNotifiedAt,
         callStartedAt: callStartedAt,
         callEndedAt: callEndedAt,
@@ -221,15 +260,19 @@ class Ticket {
         autoClosedAt: autoClosedAt,
         noShowAt: noShowAt,
         escalatedAt: escalatedAt,
+        cancelledAt: cancelledAt ?? this.cancelledAt,
       );
 
   // ─── Display helpers ───
+
   String get statusDisplay {
     switch (status) {
       case 'pending':
         return 'Pending Verification';
       case 'verified':
         return 'Verified — Pending On-Site';
+      case 'pending_onsite':
+        return 'Pending On-Site';
       case 'in_progress':
         return 'On-Site In Progress';
       case 'resolved':
@@ -249,7 +292,9 @@ class Ticket {
   bool get isActive =>
       status == 'pending' ||
           status == 'verified' ||
+          status == 'pending_onsite' ||
           status == 'in_progress' ||
+          status == 'resolved' ||
           status == 'reopened';
   bool get isResolved => status == 'resolved' || status == 'closed';
 
@@ -273,7 +318,26 @@ class Ticket {
     return '$siteName → $laneName ($laneDirectionDisplay)';
   }
 
+  /// Label used in ticket details. Backward compatible with `client`.
+  String get createdByRoleLabel {
+    switch (createdByRole) {
+      case 'client':
+      case 'owner':
+        return 'Site Owner';
+      case 'operator':
+        return 'Site Operator';
+      case 'adsb':
+      case 'technician':
+      case 'onsite':
+      case 'admin':
+        return 'ADSB Support';
+      default:
+        return createdByRole;
+    }
+  }
+
   // ─── Duration Helpers ───
+
   Duration? get totalResolutionTime {
     final end = resolvedAt ?? autoClosedAt ?? clientConfirmedAt;
     if (end == null) return null;

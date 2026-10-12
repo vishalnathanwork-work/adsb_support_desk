@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF1565C0);      // ADSB blue
+  static const Color primary = Color(0xFF30CE14);      // ADSB blue
   static const Color primaryDark = Color(0xFF0D47A1);
   static const Color accent = Color(0xFF00ACC1);
   static const Color background = Color(0xFFF5F7FA);

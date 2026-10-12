@@ -7,16 +7,17 @@ import '../../services/chat_service.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/chat_bubble.dart';
 
+/// Unified ticket chat — used by EVERYONE.
+/// Site Owner, Site Operator, ADSB Support, TT, On-Site, Admin.
+/// TT/On-Site/ADSB all appear as "ADSB Team" to external users.
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
   final UserModel user;
-  final String channel;
 
   const AdsbChatScreen({
     super.key,
     required this.ticketId,
     required this.user,
-    this.channel = 'ticket',
   });
 
   @override
@@ -52,10 +53,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     setState(() => _ticket = t);
 
     if (t != null) {
-      await _chatService.ensureTicketSummary(
-        ticket: t,
-        channel: widget.channel,
-      );
+      await _chatService.ensureTicketSummary(t);
       if (!mounted) return;
       setState(() => _summaryReady = true);
     }
@@ -73,37 +71,39 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     });
   }
 
+  /// Chat is open while the ticket is active.
+  /// Read-only once the ticket is closed or cancelled.
+  bool get _chatOpen {
+    if (_ticket == null) return false;
+    return _ticket!.status != 'closed' && _ticket!.status != 'cancelled';
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isSending) return;
+    if (!_chatOpen) return;
 
     setState(() => _isSending = true);
 
-    final isInternal = widget.channel == 'internal';
+    // Auto-escalate: if ADSB replies first on a pending ticket,
+    // the ticket moves to "verified" so TT/on-site know to review.
     final isAdsb = widget.user.role == 'adsb';
+    if (isAdsb && _ticket != null && _ticket!.status == 'pending') {
+      await _ticketService.autoEscalateIfNeeded(
+        ticketId: widget.ticketId,
+        reason: text,
+        adsbEmail: widget.user.email,
+        adsbName: widget.user.name,
+      );
 
-    // Auto-escalate when ADSB sends first internal message.
-    // Notifications fired inside TicketService.autoEscalateIfNeeded().
-    if (isInternal && isAdsb && _ticket != null) {
-      if (_ticket!.status == 'pending') {
-        await _ticketService.autoEscalateIfNeeded(
-          ticketId: widget.ticketId,
-          reason: text,
-          adsbEmail: widget.user.email,
-          adsbName: widget.user.name,
-        );
-
-        final fresh =
-        await _ticketService.getTicketById(widget.ticketId);
-        if (mounted) setState(() => _ticket = fresh);
-      }
+      final fresh = await _ticketService.getTicketById(widget.ticketId);
+      if (mounted) setState(() => _ticket = fresh);
     }
 
     _controller.clear();
 
     await _chatService.sendMessage(
       ticketId: widget.ticketId,
-      channel: widget.channel,
       senderEmail: widget.user.email,
       senderName: widget.user.name,
       senderRole: widget.user.role,
@@ -116,104 +116,87 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isInternal = widget.channel == 'internal';
-
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isInternal
-                  ? 'Internal — ${widget.ticketId}'
-                  : 'Chat — ${widget.ticketId}',
+              'Chat — ${widget.ticketId}',
               style: const TextStyle(fontSize: 16),
             ),
             if (_ticket != null)
               Text(
                 '${_ticket!.siteName} · ${_ticket!.laneName}',
                 style: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.normal),
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
           ],
         ),
-        backgroundColor:
-        isInternal ? const Color(0xFF5E35B1) : AppColors.primary,
-        actions: [
-          if (isInternal)
-            Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Center(
-                  child: Text(
-                    'ADSB ↔ TT',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
       body: Column(
         children: [
-          if (isInternal)
+          // ─── Closed banner ───
+          if (!_chatOpen && _ticket != null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
-              color: const Color(0xFF5E35B1).withOpacity(0.1),
+              color: AppColors.textSecondary.withOpacity(0.1),
               child: const Row(
                 children: [
-                  Icon(Icons.lock, size: 14, color: Color(0xFF5E35B1)),
+                  Icon(
+                    Icons.lock_outline,
+                    size: 14,
+                    color: AppColors.textSecondary,
+                  ),
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Private channel — client cannot see this conversation.',
+                      'This ticket is closed. Chat is read-only.',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF5E35B1),
-                          fontWeight: FontWeight.w600),
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
+          // ─── Messages ───
           Expanded(
             child: !_summaryReady
                 ? const Center(child: CircularProgressIndicator())
                 : StreamBuilder<List<ChatMessage>>(
               stream: _chatService.streamMessages(
                 ticketId: widget.ticketId,
-                channel: widget.channel,
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState ==
                     ConnectionState.waiting) {
                   return const Center(
-                      child: CircularProgressIndicator());
+                    child: CircularProgressIndicator(),
+                  );
                 }
                 if (snapshot.hasError) {
                   return Center(
-                      child: Text('Error: ${snapshot.error}'));
+                    child: Text('Error: ${snapshot.error}'),
+                  );
                 }
 
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
                   return const Center(
-                      child: Text('No messages yet. Say something.'));
+                    child: Text('No messages yet. Say something.'),
+                  );
                 }
 
                 WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => _scrollToBottom());
+                      (_) => _scrollToBottom(),
+                );
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -228,65 +211,74 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               },
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(
-                  color: isInternal
-                      ? const Color(0xFF5E35B1).withOpacity(0.3)
-                      : AppColors.divider,
-                  width: isInternal ? 2 : 1,
+
+          // ─── Input row ───
+          if (_chatOpen)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: AppColors.divider),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        enabled: !_isSending,
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message...',
+                          border: InputBorder.none,
+                          filled: false,
+                        ),
+                      ),
+                    ),
+                    _isSending
+                        ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    )
+                        : IconButton(
+                      icon: const Icon(
+                        Icons.send,
+                        color: AppColors.primary,
+                      ),
+                      onPressed: _send,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: AppColors.background,
+              child: const SafeArea(
+                top: false,
+                child: Center(
+                  child: Text(
+                    'Chat closed — this ticket is complete.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
               ),
             ),
-            child: SafeArea(
-              top: false,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      enabled: !_isSending,
-                      decoration: InputDecoration(
-                        hintText: isInternal
-                            ? 'Internal note to TT team...'
-                            : 'Type a message...',
-                        border: InputBorder.none,
-                        filled: false,
-                      ),
-                    ),
-                  ),
-                  _isSending
-                      ? Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: isInternal
-                            ? const Color(0xFF5E35B1)
-                            : AppColors.primary,
-                      ),
-                    ),
-                  )
-                      : IconButton(
-                    icon: Icon(
-                      Icons.send,
-                      color: isInternal
-                          ? const Color(0xFF5E35B1)
-                          : AppColors.primary,
-                    ),
-                    onPressed: _send,
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );

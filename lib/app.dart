@@ -5,7 +5,7 @@ import 'config/routes.dart';
 import 'models/user_model.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/client/client_dashboard.dart';
+import 'screens/owner/owner_dashboard.dart';
 import 'screens/operator/operator_dashboard.dart';
 import 'screens/adsb/adsb_dashboard.dart';
 import 'screens/technician/technician_dashboard.dart';
@@ -30,10 +30,10 @@ class AdsbSupportApp extends StatelessWidget {
         final user = settings.arguments as UserModel?;
 
         switch (settings.name) {
-          case AppRoutes.clientDashboard:
+          case AppRoutes.ownerDashboard:
             if (user == null) return _fallbackLogin();
             return MaterialPageRoute(
-              builder: (_) => ClientDashboard(user: user),
+              builder: (_) => OwnerDashboard(user: user),
             );
           case AppRoutes.operatorDashboard:
             if (user == null) return _fallbackLogin();

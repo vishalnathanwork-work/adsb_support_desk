@@ -4,7 +4,8 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
-import '../client/client_profile_tab.dart';
+import '../common/ticket_history_screen.dart';
+import '../owner/owner_profile_tab.dart';
 import '../main_navigation.dart';
 import '../onsite/onsite_queue_screen.dart';
 import 'adsb_queue_screen.dart';
@@ -65,6 +66,15 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
           label: 'On-Site',
           icon: Icons.location_on_outlined,
           page: OnsiteQueueScreen(user: widget.user),
+        ),
+        NavTab(
+          label: 'History',
+          icon: Icons.history,
+          page: TicketHistoryScreen(
+            user: widget.user,
+            title: 'All Ticket History',
+            loader: () => TicketService().getAllTickets(),
+          ),
         ),
         NavTab(
           label: 'Profile',

@@ -26,7 +26,7 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
   String get _name => widget.userData['name'] ?? 'User';
   String get _email => widget.userData['email'] ?? '';
   bool get _isActive => widget.userData['is_active'] ?? true;
-  String get _role => widget.userData['role'] ?? 'client';
+  String get _role => widget.userData['role'] ?? 'owner';
 
   bool get _isSelf => _email == widget.currentAdminEmail;
 
@@ -226,7 +226,7 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
 
   String _roleLabel(String role) {
     switch (role) {
-      case 'client':
+      case 'owner':
         return 'Client';
       case 'operator':
         return 'Operator';

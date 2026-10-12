@@ -6,7 +6,7 @@ import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/status_badge.dart';
-import '../client/ticket_detail_screen.dart';
+import 'admin_ticket_control_screen.dart';
 
 class AdminAllTicketsScreen extends StatefulWidget {
   final UserModel user;
@@ -75,7 +75,7 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                   controller: _searchController,
                   onChanged: (_) => setState(_applyFilter),
                   decoration: const InputDecoration(
-                    hintText: 'Search by ID, product, or client...',
+                    hintText: 'Search by ID, product, or owner...',
                     prefixIcon: Icon(Icons.search),
                     filled: true,
                   ),
@@ -119,9 +119,9 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => TicketDetailScreen(
+                          builder: (_) => AdminTicketControlScreen(
                             ticketId: t.id,
-                            user: widget.user,
+                            admin: widget.user,
                           ),
                         ),
                       );

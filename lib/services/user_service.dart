@@ -33,7 +33,7 @@ class UserService {
     final all = await getAllUsers();
     return all.where((u) {
       final role = u['role'];
-      return role == 'client' || role == 'operator';
+      return role == 'owner' || role == 'operator';
     }).toList();
   }
 

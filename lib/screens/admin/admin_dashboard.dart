@@ -2,19 +2,18 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
-import '../../services/notification_listener.dart';
-import '../../services/session_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
+import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
-import '../client/client_profile_tab.dart';
+import '../owner/owner_profile_tab.dart';
 import 'admin_all_ticket_screen.dart';
 import 'admin_team_management_screen.dart';
 import 'admin_users_screen.dart';
 import 'admin_preset_management_screen.dart';
 import 'data_inspector_screen.dart';
 import 'analytics_screen.dart';
-
 
 class AdminDashboard extends StatefulWidget {
   final UserModel user;
@@ -44,6 +43,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
+  Future<void> _logout() async {
+    await SessionService().clear();
+    await AuthService().logout();
+    if (mounted) {
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil('/login', (r) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MainNavigation(
@@ -65,30 +73,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
           page: AdminAllTicketsScreen(user: widget.user),
         ),
         NavTab(
+          label: 'History',
+          icon: Icons.history,
+          page: TicketHistoryScreen(
+            user: widget.user,
+            title: 'All Ticket History',
+            loader: () => TicketService().getAllTickets(),
+          ),
+        ),
+        NavTab(
           label: 'Teams',
           icon: Icons.groups_outlined,
           page: AdminTeamManagementScreen(user: widget.user),
         ),
         NavTab(
-          label: 'Users',
-          icon: Icons.people_outline,
-          page: AdminUsersScreen(user: widget.user),
-        ),
-        NavTab(
           label: 'Profile',
           icon: Icons.person_outline,
-          page: ClientProfileTab(
+          page: OwnerProfileTab(
             user: widget.user,
-            onLogout: () async {
-              AppNotificationListener().stop();
-              await SessionService().clear();
-              final authService = AuthService();
-              await authService.logout();
-              if (context.mounted) {
-                Navigator.of(context)
-                    .pushNamedAndRemoveUntil('/login', (r) => false);
-              }
-            },
+            onLogout: _logout,
           ),
         ),
       ],
@@ -116,10 +119,12 @@ class _AdminHome extends StatelessWidget {
         .where((t) =>
     t.status == 'pending' ||
         t.status == 'verified' ||
+        t.status == 'pending_onsite' ||
         t.status == 'in_progress')
         .length;
-    final resolved =
-        tickets.where((t) => t.status == 'resolved' || t.status == 'closed').length;
+    final resolved = tickets
+        .where((t) => t.status == 'resolved' || t.status == 'closed')
+        .length;
 
     return Scaffold(
       appBar: AppBar(
@@ -146,8 +151,8 @@ class _AdminHome extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Administrator',
-                        style:
-                        TextStyle(color: Colors.white70, fontSize: 13)),
+                        style: TextStyle(
+                            color: Colors.white70, fontSize: 13)),
                     const SizedBox(height: 4),
                     Text(user.name,
                         style: const TextStyle(
@@ -169,13 +174,19 @@ class _AdminHome extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _kpiCard('Total', '$total',
-                            Icons.list_alt_outlined, AppColors.primary),
+                        child: _kpiCard(
+                            'Total',
+                            '$total',
+                            Icons.list_alt_outlined,
+                            AppColors.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _kpiCard('Open', '$open',
-                            Icons.pending_outlined, AppColors.warning),
+                        child: _kpiCard(
+                            'Open',
+                            '$open',
+                            Icons.pending_outlined,
+                            AppColors.warning),
                       ),
                     ],
                   ),
@@ -191,8 +202,11 @@ class _AdminHome extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _kpiCard('Avg Time', '—',
-                            Icons.timer_outlined, AppColors.accent),
+                        child: _kpiCard(
+                            'Avg Time',
+                            '—',
+                            Icons.timer_outlined,
+                            AppColors.accent),
                       ),
                     ],
                   ),
@@ -212,7 +226,8 @@ class _AdminHome extends StatelessWidget {
                     () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AdminAllTicketsScreen(user: user),
+                    builder: (_) =>
+                        AdminAllTicketsScreen(user: user),
                   ),
                 ),
               ),
@@ -225,7 +240,8 @@ class _AdminHome extends StatelessWidget {
                     () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AdminTeamManagementScreen(user: user),
+                    builder: (_) =>
+                        AdminTeamManagementScreen(user: user),
                   ),
                 ),
               ),
@@ -251,11 +267,11 @@ class _AdminHome extends StatelessWidget {
                     () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const AdminPresetManagementScreen(),
+                    builder: (_) =>
+                    const AdminPresetManagementScreen(),
                   ),
                 ),
               ),
-
               _actionTile(
                 context,
                 Icons.analytics_outlined,
@@ -304,7 +320,9 @@ class _AdminHome extends StatelessWidget {
           const SizedBox(height: 12),
           Text(value,
               style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
           const SizedBox(height: 2),
           Text(label,
               style: const TextStyle(
@@ -351,15 +369,18 @@ class _AdminHome extends StatelessWidget {
                 children: [
                   Text(title,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(subtitle,
                       style: const TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary)),
+                          fontSize: 12,
+                          color: AppColors.textSecondary)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textSecondary),
           ],
         ),
       ),

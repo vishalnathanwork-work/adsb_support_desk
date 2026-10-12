@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 
+typedef OwnerProfileTab = ClientProfileTab;
+
 class ClientProfileTab extends StatelessWidget {
   final UserModel user;
   final VoidCallback onLogout;

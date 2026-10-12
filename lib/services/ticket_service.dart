@@ -9,7 +9,7 @@ class TicketService {
   final _notif = NotificationService();
 
   // ═══════════════════════════════════════════════
-  // READ
+  // READ — general
   // ═══════════════════════════════════════════════
 
   Future<List<Ticket>> getAllTickets() async {
@@ -51,6 +51,10 @@ class TicketService {
     }
   }
 
+  // ═══════════════════════════════════════════════
+  // READ — by status
+  // ═══════════════════════════════════════════════
+
   Future<List<Ticket>> getPendingTickets() => _byStatus('pending');
   Future<List<Ticket>> getVerifiedTickets() => _byStatus('verified');
   Future<List<Ticket>> getInProgressTickets() => _byStatus('in_progress');
@@ -63,7 +67,7 @@ class TicketService {
       final list = snapshot.docs
           .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
-      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
       return list;
     } catch (e) {
       print('_byStatus($status) error: $e');
@@ -72,10 +76,116 @@ class TicketService {
   }
 
   // ═══════════════════════════════════════════════
-  // REAL-TIME STREAMS
+  // READ — active tickets
   // ═══════════════════════════════════════════════
 
-  /// Live stream of verified tickets — used by TT Reviews queue.
+  Future<List<Ticket>> getActiveTickets() async {
+    try {
+      final snapshot = await _col
+          .where('status', whereIn: [
+        'pending',
+        'verified',
+        'pending_onsite',
+        'in_progress',
+        'resolved',
+        'reopened',
+      ])
+          .get();
+
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
+      return list;
+    } catch (e) {
+      print('getActiveTickets error: $e');
+      return [];
+    }
+  }
+
+  Future<List<Ticket>> getActiveTicketsForSites(List<String> siteIds) async {
+    if (siteIds.isEmpty) return [];
+    try {
+      final chunks = <List<String>>[];
+      for (var i = 0; i < siteIds.length; i += 10) {
+        chunks.add(siteIds.sublist(
+            i, i + 10 > siteIds.length ? siteIds.length : i + 10));
+      }
+
+      final all = <Ticket>[];
+      for (final chunk in chunks) {
+        final snapshot = await _col
+            .where('site_id', whereIn: chunk)
+            .where('status', whereIn: [
+          'pending',
+          'verified',
+          'pending_onsite',
+          'in_progress',
+          'resolved',
+          'reopened',
+        ])
+            .get();
+
+        all.addAll(snapshot.docs.map((doc) =>
+            Ticket.fromJson({...doc.data(), 'ticket_id': doc.id})));
+      }
+      all.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
+      return all;
+    } catch (e) {
+      print('getActiveTicketsForSites error: $e');
+      return [];
+    }
+  }
+
+  Future<List<Ticket>> getTicketsForSites(List<String> siteIds) async {
+    if (siteIds.isEmpty) return [];
+    try {
+      final chunks = <List<String>>[];
+      for (var i = 0; i < siteIds.length; i += 10) {
+        chunks.add(siteIds.sublist(
+            i, i + 10 > siteIds.length ? siteIds.length : i + 10));
+      }
+
+      final all = <Ticket>[];
+      for (final chunk in chunks) {
+        final snapshot =
+        await _col.where('site_id', whereIn: chunk).get();
+        all.addAll(snapshot.docs.map((doc) =>
+            Ticket.fromJson({...doc.data(), 'ticket_id': doc.id})));
+      }
+      all.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
+      return all;
+    } catch (e) {
+      print('getTicketsForSites error: $e');
+      return [];
+    }
+  }
+
+  Future<List<Ticket>> getTTQueueTickets() async {
+    try {
+      final snapshot = await _col
+          .where('status', whereIn: [
+        'verified',
+        'pending_onsite',
+        'in_progress',
+      ])
+          .get();
+
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
+      return list;
+    } catch (e) {
+      print('getTTQueueTickets error: $e');
+      return [];
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // STREAMS
+  // ═══════════════════════════════════════════════
+
   Stream<List<Ticket>> streamVerifiedTickets() {
     return _col
         .where('status', isEqualTo: 'verified')
@@ -84,7 +194,7 @@ class TicketService {
       final list = snapshot.docs
           .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
-      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
       return list;
     });
   }
@@ -204,7 +314,7 @@ class TicketService {
   }
 
   // ═══════════════════════════════════════════════
-  // BUSINESS LOGIC — with notifications
+  // BUSINESS LOGIC
   // ═══════════════════════════════════════════════
 
   Future<void> assignToMe(
@@ -231,8 +341,6 @@ class TicketService {
     }
   }
 
-  /// Auto-escalate: called when ADSB sends their first internal chat
-  /// message. Only escalates if the ticket is still 'pending'.
   Future<void> autoEscalateIfNeeded({
     required String ticketId,
     required String reason,
@@ -292,7 +400,6 @@ class TicketService {
     }
   }
 
-  /// Move a verified ticket into the on-site queue.
   Future<void> sendToOnsiteQueue(String ticketId) async {
     await updateTicketFields(ticketId, {
       'status': 'pending_onsite',
@@ -383,12 +490,79 @@ class TicketService {
     }
   }
 
+  // ═══════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════
+
+  /// All tickets (any status) at a list of sites.
+  /// Used by owner/operator.
+  Future<List<Ticket>> getHistoryForSites(List<String> siteIds) async {
+    if (siteIds.isEmpty) return [];
+    try {
+      final chunks = <List<String>>[];
+      for (var i = 0; i < siteIds.length; i += 10) {
+        chunks.add(siteIds.sublist(
+            i, i + 10 > siteIds.length ? siteIds.length : i + 10));
+      }
+
+      final all = <Ticket>[];
+      for (final chunk in chunks) {
+        final snap =
+        await _col.where('site_id', whereIn: chunk).get();
+        all.addAll(snap.docs.map((doc) =>
+            Ticket.fromJson({...doc.data(), 'ticket_id': doc.id})));
+      }
+      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return all;
+    } catch (e) {
+      print('getHistoryForSites error: $e');
+      return [];
+    }
+  }
+
+  /// All tickets where the given user was the assigned handler.
+  /// Used by TT and on-site.
+  Future<List<Ticket>> getHistoryForAssignee(String email) async {
+    try {
+      final snap =
+      await _col.where('assigned_to', isEqualTo: email).get();
+      final list = snap.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return list;
+    } catch (e) {
+      print('getHistoryForAssignee error: $e');
+      return [];
+    }
+  }
+
+  /// All tickets created by a user.
+  Future<List<Ticket>> getHistoryByCreator(String email) async {
+    try {
+      final snap =
+      await _col.where('created_by', isEqualTo: email).get();
+      final list = snap.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (e) {
+      print('getHistoryByCreator error: $e');
+      return [];
+    }
+  }
+
   Future<void> cancelTicket(String ticketId) async {
-    await updateTicketFields(ticketId, {'status': 'cancelled'});
+    await updateTicketFields(ticketId, {
+      'status': 'cancelled',
+      'cancelled_at': FieldValue.serverTimestamp(),
+    });
 
     final fresh = await getTicketById(ticketId);
     if (fresh != null) {
       await _notif.onTicketCancelled(fresh);
     }
   }
+
 }

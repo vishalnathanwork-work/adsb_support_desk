@@ -6,10 +6,10 @@ class AppConstants {
 
   // Mock users for testing
   static final Map<String, UserModel> mockUsers = {
-    'client@adsb.com': UserModel(
-      email: 'client@adsb.com',
+    'owner@adsb.com': UserModel(
+      email: 'owner@adsb.com',
       name: 'Parken Client',
-      role: 'client',
+      role: 'owner',
       phone: '+60 12-345 6789',
       company: 'Parken Sdn Bhd',
     ),
@@ -45,7 +45,7 @@ class AppConstants {
 
   // Mock passwords (in real app, this comes from backend)
   static const Map<String, String> mockPasswords = {
-    'client@adsb.com': 'client123',
+    'owner@adsb.com': 'client123',
     'operator@adsb.com': 'operator123',
     'adsb@adsb.com': 'adsb123',
     'tech@adsb.com': 'tech123',

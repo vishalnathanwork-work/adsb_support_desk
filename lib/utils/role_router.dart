@@ -22,8 +22,8 @@ class RoleRouter {
 
   static String _routeForRole(String role) {
     switch (role) {
-      case 'client':
-        return '/client';
+      case 'owner':
+        return '/owner';
       case 'operator':
         return '/operator';
       case 'adsb':

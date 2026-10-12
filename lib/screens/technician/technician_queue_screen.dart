@@ -19,6 +19,26 @@ class TechnicianQueueScreen extends StatefulWidget {
 
 class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
   final _service = TicketService();
+  List<Ticket> _tickets = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _isLoading = true);
+
+    final list = await _service.getTTQueueTickets();
+
+    if (!mounted) return;
+    setState(() {
+      _tickets = list;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,76 +47,46 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
         title: const Text('Reviews'),
         backgroundColor: const Color(0xFF5E35B1),
         actions: [
-          // Manual refresh button — triggers a rebuild via setState
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => setState(() {}),
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      body: StreamBuilder<List<Ticket>>(
-        stream: _service.streamVerifiedTickets(),
-        builder: (context, snapshot) {
-          // Loading
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // Error
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: AppColors.error),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Error loading reviews',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final tickets = snapshot.data ?? [];
-
-          // Empty state
-          if (tickets.isEmpty) {
-            return const EmptyState(
-              icon: Icons.check_circle_outline,
-              title: 'No pending reviews',
-              subtitle:
-              'Tickets escalated by ADSB will appear here. '
-                  'They disappear once ADSB takes action.',
-            );
-          }
-
-          // List
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: tickets.length,
-            itemBuilder: (context, i) => _ticketCard(tickets[i]),
-          );
-        },
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _tickets.isEmpty
+          ? const EmptyState(
+        icon: Icons.check_circle_outline,
+        title: 'No pending reviews',
+        subtitle:
+        'Tickets you are advising on appear here until resolved.',
+      )
+          : RefreshIndicator(
+        onRefresh: _load,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: _tickets.length,
+          itemBuilder: (context, i) => _ticketCard(_tickets[i]),
+        ),
       ),
     );
   }
 
   Widget _ticketCard(Ticket t) {
+    final isVerified = t.status == 'verified';
+
+    // Badge text/label per status
+    String? badgeLabel;
+    Color? badgeColor;
+    if (isVerified) {
+      badgeLabel = 'AWAITING YOU';
+      badgeColor = const Color(0xFF5E35B1);
+    } else if (t.status == 'pending_onsite') {
+      badgeLabel = 'WITH ON-SITE';
+      badgeColor = AppColors.warning;
+    } else if (t.status == 'in_progress') {
+      badgeLabel = 'ON-SITE WORKING';
+      badgeColor = AppColors.primary;
+    }
+
     return InkWell(
       onTap: () async {
         await Navigator.push(
@@ -108,7 +98,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
             ),
           ),
         );
-        // No manual reload — stream handles it
+        _load();
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -125,7 +115,6 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 Expanded(
@@ -138,12 +127,28 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                     ),
                   ),
                 ),
+                if (badgeLabel != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: badgeColor!.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      badgeLabel,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: badgeColor,
+                      ),
+                    ),
+                  ),
                 StatusBadge(status: t.status),
               ],
             ),
             const SizedBox(height: 10),
-
-            // Product + issue
             Row(
               children: [
                 const Icon(Icons.build_outlined,
@@ -172,8 +177,6 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Site + parking
             Row(
               children: [
                 const Icon(Icons.location_on_outlined,
@@ -192,39 +195,28 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
               ],
             ),
             const SizedBox(height: 8),
-
-            // Escalation banner
-            Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF5E35B1).withOpacity(0.06),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.arrow_upward,
-                      size: 12, color: Color(0xFF5E35B1)),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      'Escalated by ${t.assignedToName ?? "ADSB Support"}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF5E35B1),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    DateFormatter.relative(t.updatedAt),
+            Row(
+              children: [
+                const Icon(Icons.person_outline,
+                    size: 12, color: AppColors.textSecondary),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Reported by ${t.createdByName}',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                ],
-              ),
+                ),
+                Text(
+                  DateFormatter.relative(t.updatedAt),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

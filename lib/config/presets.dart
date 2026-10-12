@@ -1,44 +1,114 @@
-class SiteLocation {
-  final String id;
-  final String name;
-  final String address;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-  SiteLocation({required this.id, required this.name, required this.address});
-}
+class PresetService {
+  final _col = FirebaseFirestore.instance.collection('presets');
 
-class Presets {
-  // Mock site locations (in real app, these come from backend)
-  static const List<Map<String, String>> sites = [
-    {'id': 'SITE-001', 'name': 'Parken HQ', 'address': 'Melaka, Malaysia'},
-    {'id': 'SITE-002', 'name': 'Parken Branch A', 'address': 'Ayer Keroh, Melaka'},
-    {'id': 'SITE-003', 'name': 'Parken Branch B', 'address': 'Jasin, Melaka'},
-  ];
+  // ─── READ ───
 
-  // Product types
-  static const List<String> productTypes = [
-    'Parken LPR',
-    'Parken Barrier',
-    'Parken Payment Terminal',
-    'Parken Intercom',
-    'Parken CCTV',
-    'Parken Communication Cabling',
-    'Parken Loop Sensitivity',
-    'Parken Cloud Reporting',
-    'Parken Server PC',
-    'Parken Other',
-  ];
+  Future<List<String>> getProductTypes() => _getStringList('product_types');
+  Future<List<String>> getRootCauses() => _getStringList('root_causes');
+  Future<List<String>> getSolutions() => _getStringList('solutions');
 
-  // Product issues per product type (simplified — same list for now)
-  static const List<String> productIssues = [
-    'Gate not opening',
-    'Gate not closing',
-    'Barrier stuck',
-    'Ticket not printing',
-    'Payment not accepted',
-    'Screen not working',
-    'Sensor not detecting',
-    'Power failure',
-    'Network disconnected',
-    'Other (please describe)',
-  ];
+  /// Returns a map of product type → list of issues.
+  Future<Map<String, List<String>>> getProductIssues() async {
+    try {
+      final doc = await _col.doc('product_issues').get();
+      if (!doc.exists) return {};
+
+      final data = doc.data()!;
+      final items = data['items'];
+
+      if (items is! Map) return {};
+
+      final result = <String, List<String>>{};
+      items.forEach((key, value) {
+        if (value is List) {
+          result[key.toString()] =
+              value.map((e) => e.toString()).toList();
+        }
+      });
+      return result;
+    } catch (e) {
+      print('getProductIssues error: $e');
+      return {};
+    }
+  }
+
+  Future<List<Map<String, String>>> getSites() async {
+    try {
+      final doc = await _col.doc('sites').get();
+      if (!doc.exists) return [];
+      final data = doc.data()!;
+      final items = data['items'] as List? ?? [];
+      return items
+          .map((e) => Map<String, String>.from(e as Map))
+          .toList();
+    } catch (e) {
+      print('getSites error: $e');
+      return [];
+    }
+  }
+
+  Future<List<String>> _getStringList(String docId) async {
+    try {
+      final doc = await _col.doc(docId).get();
+      if (!doc.exists) return [];
+      final data = doc.data()!;
+      return List<String>.from(data['items'] ?? []);
+    } catch (e) {
+      print('_getStringList($docId) error: $e');
+      return [];
+    }
+  }
+
+  // ─── WRITE ───
+
+  Future<bool> saveProductTypes(List<String> items) =>
+      _saveStringList('product_types', items);
+
+  Future<bool> saveRootCauses(List<String> items) =>
+      _saveStringList('root_causes', items);
+
+  Future<bool> saveSolutions(List<String> items) =>
+      _saveStringList('solutions', items);
+
+  /// Save the product type → issues mapping.
+  Future<bool> saveProductIssues(Map<String, List<String>> items) async {
+    try {
+      await _col.doc('product_issues').set({
+        'items': items,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('saveProductIssues error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> saveSites(List<Map<String, String>> items) async {
+    try {
+      await _col.doc('sites').set({
+        'items': items,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('saveSites error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _saveStringList(String docId, List<String> items) async {
+    try {
+      await _col.doc(docId).set({
+        'items': items,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('_saveStringList($docId) error: $e');
+      return false;
+    }
+  }
 }

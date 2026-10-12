@@ -40,7 +40,7 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
       final aUnclaimed = a.status == 'pending_onsite';
       final bUnclaimed = b.status == 'pending_onsite';
       if (aUnclaimed != bUnclaimed) return aUnclaimed ? -1 : 1;
-      return a.createdAt.compareTo(b.createdAt);
+      return b.createdAt.compareTo(a.createdAt);
     });
 
     if (!mounted) return;

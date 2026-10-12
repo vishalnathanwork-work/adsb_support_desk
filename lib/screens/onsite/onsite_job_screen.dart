@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../config/app_config.dart';
 import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
+import '../../services/image_service.dart';
 import '../../services/ticket_service.dart';
+import '../../widgets/image_gallery.dart';
 import '../../widgets/status_badge.dart';
 import '../adsb/adsb_chat_screen.dart';
 
@@ -22,6 +26,7 @@ class OnsiteJobScreen extends StatefulWidget {
 
 class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
   final _service = TicketService();
+  final _imageService = ImageService();
   Ticket? _ticket;
   bool _isLoading = true;
   bool _isWorking = false;
@@ -88,14 +93,11 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     if (ok != true) return;
 
     setState(() => _isWorking = true);
-
-    // Notifications fire inside TicketService
     await _service.claimOnsiteJob(
       ticketId: widget.ticketId,
       adsbEmail: widget.user.email,
       adsbName: widget.user.name,
     );
-
     await _load();
 
     if (!mounted) return;
@@ -108,14 +110,28 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     );
   }
 
+  Future<void> _openChat() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdsbChatScreen(
+          ticketId: widget.ticketId,
+          user: widget.user,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openResolutionForm() async {
-    final result = await showModalBottomSheet<Map<String, String?>>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ResolutionSheet(
         rootCauses: _rootCauses,
         solutions: _solutions,
+        ticketId: widget.ticketId,
+        imageService: _imageService,
       ),
     );
 
@@ -123,14 +139,14 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 
     setState(() => _isWorking = true);
 
-    // Notifications fire inside TicketService
     await _service.completeOnSite(
       ticketId: widget.ticketId,
-      rootCause: result['rootCause']!,
-      solutionApplied: result['solution']!,
-      resolutionNotes: result['notes'] ?? '',
+      rootCause: result['rootCause'] as String,
+      solutionApplied: result['solution'] as String,
+      resolutionNotes: (result['notes'] as String?) ?? '',
       agentEmail: widget.user.email,
       agentName: widget.user.name,
+      completionImageUrl: result['imageUrl'] as String?,
     );
 
     if (!mounted) return;
@@ -138,7 +154,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Job completed. Awaiting client confirmation.'),
+        content: Text('Job marked completed. Awaiting client confirmation.'),
         backgroundColor: AppColors.success,
       ),
     );
@@ -170,19 +186,8 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline),
-            tooltip: 'Chat with support team',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AdsbChatScreen(
-                    ticketId: t.id,
-                    user: widget.user,
-                    channel: 'internal',
-                  ),
-                ),
-              );
-            },
+            tooltip: 'Open chat',
+            onPressed: _openChat,
           ),
         ],
       ),
@@ -196,10 +201,12 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 Row(
                   children: [
                     const Expanded(
-                      child: Text('Status',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary)),
+                      child: Text(
+                        'Status',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary),
+                      ),
                     ),
                     StatusBadge(status: t.status),
                   ],
@@ -218,6 +225,21 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               ],
             ),
 
+            // ─── Reporter's photos ───
+            if (t.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _card(
+                title: 'Reported Photo Evidence',
+                children: [
+                  ImageGallery(
+                    urls: t.imageUrls,
+                    title: 'Reported Photos',
+                  ),
+                ],
+              ),
+            ],
+
+            // ─── TT advice ───
             if (t.rootCause != null || t.solutionApplied != null) ...[
               const SizedBox(height: 16),
               _card(
@@ -232,8 +254,24 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               ),
             ],
 
+            // ─── Completion evidence (if already submitted) ───
+            if (t.completionImageUrl != null &&
+                t.completionImageUrl!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _card(
+                title: 'Completion Evidence',
+                children: [
+                  ImageGallery(
+                    urls: [t.completionImageUrl!],
+                    title: 'Completion Evidence',
+                  ),
+                ],
+              ),
+            ],
+
             const SizedBox(height: 24),
 
+            // ─── Actions ───
             if (isUnclaimed) ...[
               Container(
                 padding: const EdgeInsets.all(14),
@@ -272,7 +310,8 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                   )
                       : const Text('Claim Job',
                       style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600)),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.warning,
                     foregroundColor: Colors.white,
@@ -286,6 +325,26 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               SizedBox(
                 height: 52,
                 child: ElevatedButton.icon(
+                  onPressed: _openChat,
+                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                  label: const Text(
+                    'Open Chat',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
                   onPressed: _isWorking ? null : _openResolutionForm,
                   icon: const Icon(Icons.check_circle_outline),
                   label: _isWorking
@@ -295,9 +354,10 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2),
                   )
-                      : const Text('Mark as Resolved',
+                      : const Text('Job Completed',
                       style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600)),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
@@ -308,6 +368,26 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 ),
               ),
             ] else ...[
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _openChat,
+                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                  label: const Text(
+                    'Open Chat',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -382,16 +462,20 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 }
 
 // ═══════════════════════════════════════════════
-// RESOLUTION SHEET
+// RESOLUTION SHEET — with completion evidence
 // ═══════════════════════════════════════════════
 
 class _ResolutionSheet extends StatefulWidget {
   final List<String> rootCauses;
   final List<String> solutions;
+  final String ticketId;
+  final ImageService imageService;
 
   const _ResolutionSheet({
     required this.rootCauses,
     required this.solutions,
+    required this.ticketId,
+    required this.imageService,
   });
 
   @override
@@ -405,12 +489,109 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
   final _customRootCause = TextEditingController();
   final _customSolution = TextEditingController();
 
+  File? _evidenceImage;
+  bool _uploading = false;
+
   @override
   void dispose() {
     _notesController.dispose();
     _customRootCause.dispose();
     _customSolution.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickEvidence() async {
+    final file = await widget.imageService.pickFromCamera();
+    if (file != null && mounted) {
+      setState(() => _evidenceImage = file);
+    }
+  }
+
+  Future<void> _pickEvidenceFromGallery() async {
+    final files = await widget.imageService.pickFromGallery(limit: 1);
+    if (files.isNotEmpty && mounted) {
+      setState(() => _evidenceImage = files.first);
+    }
+  }
+
+  void _showSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take Photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickEvidence();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickEvidenceFromGallery();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_rootCause == null || _solution == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill both fields')),
+      );
+      return;
+    }
+
+    final rc = _rootCause == 'Others'
+        ? _customRootCause.text.trim()
+        : _rootCause!;
+    final sol = _solution == 'Others'
+        ? _customSolution.text.trim()
+        : _solution!;
+
+    String? imageUrl;
+    if (_evidenceImage != null) {
+      setState(() => _uploading = true);
+      imageUrl = await widget.imageService.uploadImage(
+        file: _evidenceImage!,
+        folder: 'completion_evidence',
+        ticketId: widget.ticketId,
+      );
+      if (!mounted) return;
+      setState(() => _uploading = false);
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context, {
+      'rootCause': rc,
+      'solution': sol,
+      'notes': _notesController.text.trim(),
+      'imageUrl': imageUrl,
+    });
   }
 
   @override
@@ -504,9 +685,78 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
             TextField(
               controller: _notesController,
               maxLines: 3,
-              decoration:
-              const InputDecoration(hintText: 'Any other notes'),
+              decoration: const InputDecoration(
+                  hintText: 'Any other notes'),
             ),
+
+            const SizedBox(height: 16),
+
+            const Text('Completion Evidence (Optional)',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 8),
+            if (_evidenceImage == null)
+              InkWell(
+                onTap: _showSourceSheet,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.add_a_photo_outlined,
+                          size: 28, color: AppColors.primary),
+                      SizedBox(height: 6),
+                      Text(
+                        'Add completion photo',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(
+                      _evidenceImage!,
+                      width: double.infinity,
+                      height: 180,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: InkWell(
+                      onTap: () =>
+                          setState(() => _evidenceImage = null),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
 
             const SizedBox(height: 24),
 
@@ -514,26 +764,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
               height: 52,
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  if (_rootCause == null || _solution == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Please fill both fields')),
-                    );
-                    return;
-                  }
-                  final rc = _rootCause == 'Others'
-                      ? _customRootCause.text.trim()
-                      : _rootCause!;
-                  final sol = _solution == 'Others'
-                      ? _customSolution.text.trim()
-                      : _solution!;
-                  Navigator.pop(context, {
-                    'rootCause': rc,
-                    'solution': sol,
-                    'notes': _notesController.text.trim(),
-                  });
-                },
+                onPressed: _uploading ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -541,9 +772,17 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Submit Resolution',
+                child: _uploading
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2),
+                )
+                    : const Text('Submit Resolution',
                     style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600)),
               ),
             ),
           ],

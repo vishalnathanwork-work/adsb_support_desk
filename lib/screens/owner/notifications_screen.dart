@@ -18,24 +18,6 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final _service = NotificationService();
-  List<AppNotification> _notifications = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _isLoading = true);
-    final list = await _service.getMyNotifications(widget.user.email);
-    if (!mounted) return;
-    setState(() {
-      _notifications = list;
-      _isLoading = false;
-    });
-  }
 
   Future<void> _open(AppNotification n) async {
     await _service.markAsRead(n.id);
@@ -49,31 +31,69 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
       ),
     );
-    _load();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _notifications.isEmpty
-          ? const EmptyState(
-        icon: Icons.notifications_none,
-        title: 'No notifications',
-        subtitle: 'Updates about your tickets will appear here',
-      )
-          : RefreshIndicator(
-        onRefresh: _load,
-        child: ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: _notifications.length,
-          itemBuilder: (context, i) {
-            final n = _notifications[i];
-            return _notificationTile(n);
-          },
-        ),
+      body: StreamBuilder<List<AppNotification>>(
+        stream: _service.streamMyNotifications(widget.user.email),
+        builder: (context, snapshot) {
+          // Loading
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Error
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 48, color: AppColors.error),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Error loading notifications',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final notifications = snapshot.data ?? [];
+
+          // Empty
+          if (notifications.isEmpty) {
+            return const EmptyState(
+              icon: Icons.notifications_none,
+              title: 'No notifications',
+              subtitle: 'Updates about your tickets will appear here',
+            );
+          }
+
+          // List
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: notifications.length,
+            itemBuilder: (context, i) =>
+                _notificationTile(notifications[i]),
+          );
+        },
       ),
     );
   }
@@ -86,7 +106,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: n.isRead ? Colors.white : AppColors.primary.withOpacity(0.06),
+          color: n.isRead
+              ? Colors.white
+              : AppColors.primary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.divider),
         ),
@@ -97,7 +119,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(

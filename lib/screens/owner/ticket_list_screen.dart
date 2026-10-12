@@ -5,6 +5,7 @@ import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/ticket_card.dart';
+import 'create_ticket_screen.dart';
 import 'ticket_detail_screen.dart';
 
 class TicketListScreen extends StatefulWidget {
@@ -26,7 +27,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
 
   List<Ticket> _tickets = [];
   bool _isLoading = true;
-  String _filter = 'all';
+  String _filter = 'active';
 
   @override
   void initState() {
@@ -36,7 +37,18 @@ class _TicketListScreenState extends State<TicketListScreen> {
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
-    final list = await _service.getMyTickets(widget.user.email);
+
+    List<Ticket> list;
+
+    // Owner / operator see every active ticket at their sites.
+    if ((widget.user.isOwner || widget.user.isOperator) &&
+        widget.user.siteIds.isNotEmpty) {
+      list = await _service.getActiveTicketsForSites(widget.user.siteIds);
+    } else {
+      // Fallback for other roles.
+      list = await _service.getMyTickets(widget.user.email);
+    }
+
     if (!mounted) return;
     setState(() {
       _tickets = list;
@@ -46,30 +58,44 @@ class _TicketListScreenState extends State<TicketListScreen> {
 
   List<Ticket> get _filtered {
     switch (_filter) {
-      case 'active':
-        return _tickets.where((t) => t.isActive).toList();
-      case 'resolved':
-        return _tickets.where((t) => t.isResolved).toList();
-      case 'cancelled':
-        return _tickets.where((t) => t.status == 'cancelled').toList();
-      default:
+      case 'all':
         return _tickets;
+      case 'active':
+      default:
+        return _tickets
+            .where((t) =>
+        t.status != 'closed' && t.status != 'cancelled')
+            .toList();
     }
+  }
+
+  Future<void> _openCreate() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateTicketScreen(user: widget.user),
+      ),
+    );
+    if (created == true) _load();
   }
 
   @override
   Widget build(BuildContext context) {
+    final activeCount = _tickets
+        .where((t) => t.status != 'closed' && t.status != 'cancelled')
+        .length;
+
     final body = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _tickets.isEmpty
-        ? EmptyState(
+        ? const EmptyState(
       icon: Icons.inbox_outlined,
       title: 'No tickets yet',
-      subtitle: 'Create a new ticket to get started',
+      subtitle: 'Tap + to create a new ticket',
     )
         : Column(
       children: [
-        _buildFilterRow(),
+        _buildFilterRow(activeCount),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
@@ -90,7 +116,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
                         ),
                       ),
                     );
-                    _load(); // refresh after return
+                    _load();
                   },
                 );
               },
@@ -103,28 +129,27 @@ class _TicketListScreenState extends State<TicketListScreen> {
     if (!widget.showAppBar) return body;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Tickets')),
+      appBar: AppBar(title: const Text('Tickets')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCreate,
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.add),
+        label: const Text('New Ticket'),
+      ),
       body: body,
     );
   }
 
-  Widget _buildFilterRow() {
+  Widget _buildFilterRow(int activeCount) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Colors.white,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _filterChip('All', 'all'),
-            const SizedBox(width: 8),
-            _filterChip('Active', 'active'),
-            const SizedBox(width: 8),
-            _filterChip('Resolved', 'resolved'),
-            const SizedBox(width: 8),
-            _filterChip('Cancelled', 'cancelled'),
-          ],
-        ),
+      child: Row(
+        children: [
+          _filterChip('Active ($activeCount)', 'active'),
+          const SizedBox(width: 8),
+          _filterChip('All', 'all'),
+        ],
       ),
     );
   }
@@ -132,15 +157,10 @@ class _TicketListScreenState extends State<TicketListScreen> {
   Widget _filterChip(String label, String value) {
     final selected = _filter == value;
     return ChoiceChip(
-      label: Text(label),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
       selected: selected,
       onSelected: (_) => setState(() => _filter = value),
       selectedColor: AppColors.primary.withOpacity(0.15),
-      labelStyle: TextStyle(
-        color: selected ? AppColors.primary : AppColors.textPrimary,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-        fontSize: 13,
-      ),
     );
   }
 }

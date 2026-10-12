@@ -3,7 +3,7 @@ import '../../config/theme.dart';
 import '../../models/client_model.dart';
 import '../../models/site_model.dart';
 import '../../models/user_model.dart';
-import '../../services/client_service.dart';
+import '../../services/owner_service.dart';
 import '../../services/site_service.dart';
 import '../../widgets/empty_state.dart';
 

@@ -5,8 +5,9 @@ import '../../services/notification_listener.dart';
 import '../../services/session_service.dart';
 import 'package:adsb_support_desk/services/auth_service.dart';
 import '../../services/ticket_service.dart';
+import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
-import '../client/client_profile_tab.dart';
+import '../owner/owner_profile_tab.dart';
 import 'technician_queue_screen.dart';
 import 'technician_history_screen.dart';
 
@@ -76,6 +77,16 @@ class _TechnicianDashboardState extends State<TechnicianDashboard> {
           label: 'History',
           icon: Icons.history,
           page: TechnicianHistoryScreen(user: widget.user),
+        ),
+        NavTab(
+          label: 'History',
+          icon: Icons.history,
+          page: TicketHistoryScreen(
+            user: widget.user,
+            title: 'My Reviews',
+            loader: () =>
+                TicketService().getHistoryForAssignee(widget.user.email),
+          ),
         ),
         NavTab(
           label: 'Profile',

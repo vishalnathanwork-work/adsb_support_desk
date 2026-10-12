@@ -5,17 +5,19 @@ import '../models/ticket_model.dart';
 class ChatService {
   final _col = FirebaseFirestore.instance.collection('chat_messages');
 
+  /// Single thread per ticket. Always channel = 'ticket'.
+  static const String channelId = 'ticket';
+
   // ═══════════════════════════════════════════════
-  // STREAM — filtered by ticket + channel
+  // STREAM
   // ═══════════════════════════════════════════════
 
   Stream<List<ChatMessage>> streamMessages({
     required String ticketId,
-    required String channel,
   }) {
     return _col
         .where('ticket_id', isEqualTo: ticketId)
-        .where('channel', isEqualTo: channel)
+        .where('channel', isEqualTo: channelId)
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs
@@ -35,7 +37,6 @@ class ChatService {
 
   Future<void> sendMessage({
     required String ticketId,
-    required String channel,
     required String senderEmail,
     required String senderName,
     required String senderRole,
@@ -46,7 +47,7 @@ class ChatService {
     try {
       await _col.add({
         'ticket_id': ticketId,
-        'channel': channel,
+        'channel': channelId,
         'sender_email': senderEmail,
         'sender_name': senderName,
         'sender_role': senderRole,
@@ -60,28 +61,25 @@ class ChatService {
   }
 
   // ═══════════════════════════════════════════════
-  // AUTO-POST TICKET SUMMARY (once per channel)
+  // AUTO-POST TICKET SUMMARY (once per ticket)
   // ═══════════════════════════════════════════════
 
-  Future<void> ensureTicketSummary({
-    required Ticket ticket,
-    required String channel,
-  }) async {
+  Future<void> ensureTicketSummary(Ticket ticket) async {
     try {
       final existing = await _col
           .where('ticket_id', isEqualTo: ticket.id)
-          .where('channel', isEqualTo: channel)
+          .where('channel', isEqualTo: channelId)
           .where('is_system', isEqualTo: true)
           .limit(1)
           .get();
 
       if (existing.docs.isNotEmpty) return;
 
-      final summary = _buildSummary(ticket, channel);
+      final summary = _buildSummary(ticket);
 
       await _col.add({
         'ticket_id': ticket.id,
-        'channel': channel,
+        'channel': channelId,
         'sender_email': 'system',
         'sender_name': 'System',
         'sender_role': 'system',
@@ -94,37 +92,22 @@ class ChatService {
     }
   }
 
-  String _buildSummary(Ticket t, String channel) {
+  String _buildSummary(Ticket t) {
     final buffer = StringBuffer();
     buffer.writeln('📋 TICKET SUMMARY');
     buffer.writeln('─────────────────────');
     buffer.writeln('Ticket ID: ${t.id}');
     buffer.writeln('Site: ${t.siteName}');
     buffer.writeln('Location: ${t.siteLocation}');
-    buffer.writeln(
-        'Parking: ${t.laneName} (${t.laneDirectionDisplay})');
+    buffer.writeln('Parking: ${t.laneName} (${t.laneDirectionDisplay})');
     buffer.writeln('Product: ${t.productType}');
     buffer.writeln('Issue: ${t.productIssue}');
-    buffer.writeln(
-        'Reported by: ${t.createdByName} (${t.createdByRole})');
-    buffer.writeln(
-        'Contact: ${t.contactName} — ${t.contactPhone}');
+    buffer.writeln('Reported by: ${t.createdByName}');
+    buffer.writeln('Contact: ${t.contactName} — ${t.contactPhone}');
     if (t.description.isNotEmpty) {
       buffer.writeln('Description: ${t.description}');
     }
     buffer.writeln('Status: ${t.statusDisplay}');
-
-    if (channel == 'internal') {
-      buffer.writeln('');
-      buffer.writeln('🔒 INTERNAL CHANNEL');
-      buffer.writeln(
-          'ADSB ↔ TT coordination only. Client cannot see this.');
-    } else {
-      buffer.writeln('');
-      buffer.writeln('💬 TICKET CHANNEL');
-      buffer.writeln('Client ↔ ADSB discussion.');
-    }
-
     return buffer.toString().trim();
   }
 }

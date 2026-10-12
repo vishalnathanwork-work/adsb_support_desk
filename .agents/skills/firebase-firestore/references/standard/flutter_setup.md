@@ -106,7 +106,7 @@ class ItemService {
         .where('ownerId', isEqualTo: ownerId)
         .snapshots()
         .map((snapshot) {
-          // If a custom composite index is missing during prototyping, apply sorting client-side:
+          // If a custom composite index is missing during prototyping, apply sorting owner-side:
           final items = snapshot.docs.map((doc) => Item.fromFirestore(doc)).toList();
           items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           return items;

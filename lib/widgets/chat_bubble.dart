@@ -20,45 +20,33 @@ class ChatBubble extends StatelessWidget {
   // ─────────────────────────────────────────
 
   Widget _systemCard() {
-    final isInternal = message.channel == 'internal';
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isInternal
-              ? const Color(0xFF5E35B1).withOpacity(0.06)
-              : AppColors.background,
+          color: AppColors.background,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isInternal
-                ? const Color(0xFF5E35B1).withOpacity(0.3)
-                : AppColors.divider,
-          ),
+          border: Border.all(color: AppColors.divider),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(
-                  isInternal ? Icons.lock_outline : Icons.info_outline,
+                const Icon(
+                  Icons.info_outline,
                   size: 16,
-                  color: isInternal
-                      ? const Color(0xFF5E35B1)
-                      : AppColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  isInternal ? 'Internal Ticket Details' : 'Ticket Details',
+                const Text(
+                  'Ticket Details',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: isInternal
-                        ? const Color(0xFF5E35B1)
-                        : AppColors.textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const Spacer(),
@@ -91,6 +79,12 @@ class ChatBubble extends StatelessWidget {
   // ─────────────────────────────────────────
 
   Widget _userBubble() {
+    final isInternalSide = message.isInternalSender;
+
+    // Blue = ADSB family, Cyan = site team.
+    final sideColor =
+    isInternalSide ? AppColors.primary : AppColors.accent;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -101,15 +95,15 @@ class ChatBubble extends StatelessWidget {
           if (!isMe) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: AppColors.primary.withOpacity(0.15),
+              backgroundColor: sideColor.withOpacity(0.15),
               child: Text(
                 message.senderName.isEmpty
                     ? '?'
                     : message.senderName.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+                  color: sideColor,
                 ),
               ),
             ),
@@ -120,7 +114,7 @@ class ChatBubble extends StatelessWidget {
               crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (!isMe) _senderHeader(),
+                if (!isMe) _senderHeader(sideColor),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
@@ -132,9 +126,8 @@ class ChatBubble extends StatelessWidget {
                       bottomLeft: Radius.circular(isMe ? 16 : 4),
                       bottomRight: Radius.circular(isMe ? 4 : 16),
                     ),
-                    border: isMe
-                        ? null
-                        : Border.all(color: AppColors.divider),
+                    border:
+                    isMe ? null : Border.all(color: AppColors.divider),
                   ),
                   child: Text(
                     message.message,
@@ -162,8 +155,24 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _senderHeader() {
-    final roleBadge = _roleBadge();
+  /// Sender label above the bubble.
+  /// - Internal (ADSB family): always shows "ADSB Support" — no real name.
+  /// - External (owner/operator): shows real name + role badge.
+  Widget _senderHeader(Color sideColor) {
+    if (message.isInternalSender) {
+      return const Padding(
+        padding: EdgeInsets.only(left: 4, bottom: 3),
+        child: Text(
+          'ADSB Support',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 3),
       child: Row(
@@ -177,52 +186,24 @@ class ChatBubble extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
-          if (roleBadge != null) ...[
-            const SizedBox(width: 4),
-            roleBadge,
-          ],
+          const SizedBox(width: 4),
+          Container(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: sideColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              message.displayRole,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: sideColor,
+              ),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget? _roleBadge() {
-    Color color;
-    String label;
-
-    switch (message.senderRole) {
-      case 'adsb':
-        color = AppColors.primary;
-        label = 'ADSB';
-        break;
-      case 'technician':
-        color = const Color(0xFF5E35B1);
-        label = 'TT';
-        break;
-      case 'admin':
-        color = AppColors.textPrimary;
-        label = 'ADMIN';
-        break;
-      case 'client':
-      case 'operator':
-        return null; // no badge for external users
-      default:
-        return null;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
       ),
     );
   }
