@@ -5,8 +5,10 @@ import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
 import '../../widgets/status_badge.dart';
 import 'onsite_job_screen.dart';
+import '../adsb/adsb_chat_screen.dart';
 
 class OnsiteQueueScreen extends StatefulWidget {
   final UserModel user;
@@ -19,120 +21,64 @@ class OnsiteQueueScreen extends StatefulWidget {
 
 class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
   final _service = TicketService();
-  List<Ticket> _tickets = [];
-  bool _isLoading = true;
   String _filter = 'unclaimed';
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _isLoading = true);
-
-    final pendingOnsite = await _service.getPendingOnsiteTickets();
-    final inProgress = await _service.getInProgressTickets();
-
-    final combined = [...pendingOnsite, ...inProgress];
-    combined.sort((a, b) {
-      final aUnclaimed = a.status == 'pending_onsite';
-      final bUnclaimed = b.status == 'pending_onsite';
-      if (aUnclaimed != bUnclaimed) return aUnclaimed ? -1 : 1;
-      return b.createdAt.compareTo(a.createdAt);
-    });
-
-    if (!mounted) return;
-    setState(() {
-      _tickets = combined;
-      _isLoading = false;
-    });
-  }
-
-  List<Ticket> get _filtered {
-    switch (_filter) {
-      case 'unclaimed':
-        return _tickets.where((t) => t.status == 'pending_onsite').toList();
-      case 'mine':
-        return _tickets
-            .where((t) =>
-        t.status == 'in_progress' &&
-            t.assignedTo == widget.user.email)
-            .toList();
-      case 'all':
-      default:
-        return _tickets;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final unclaimedCount =
-        _tickets.where((t) => t.status == 'pending_onsite').length;
-    final mineCount = _tickets
-        .where((t) =>
-    t.status == 'in_progress' && t.assignedTo == widget.user.email)
-        .length;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('On-Site Jobs'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.white,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _filterChip(
-                      'Unclaimed ($unclaimedCount)', 'unclaimed'),
-                  const SizedBox(width: 8),
-                  _filterChip('My Jobs ($mineCount)', 'mine'),
-                  const SizedBox(width: 8),
-                  _filterChip('All', 'all'),
+      appBar: AppBar(title: const Text('On-Site Jobs')),
+      body: StreamBuilder<List<Ticket>>(
+        stream: _service.streamOnsiteQueue(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final all = snapshot.data ?? [];
+          final unclaimed = all.where((t) => t.status == 'pending_onsite').toList();
+          final mine = all
+              .where((t) => t.status == 'in_progress' && t.assignedTo == widget.user.email)
+              .toList();
+
+          final filtered = switch (_filter) {
+            'unclaimed' => unclaimed,
+            'mine' => mine,
+            _ => all,
+          };
+
+          return Column(
+            children: [
+              // Filter chips
+              FilterChipRow(
+                selectedValue: _filter,
+                onSelected: (v) => setState(() => _filter = v),
+                options: [
+                  FilterOption(label: 'Unclaimed', value: 'unclaimed', count: unclaimed.length),
+                  FilterOption(label: 'My Jobs', value: 'mine', count: mine.length),
+                  const FilterOption(label: 'All', value: 'all'),
                 ],
               ),
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filtered.isEmpty
-                ? const EmptyState(
-              icon: Icons.check_circle_outline,
-              title: 'No jobs here',
-              subtitle: 'Jobs will appear once assigned',
-            )
-                : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _filtered.length,
-                itemBuilder: (context, i) =>
-                    _ticketTile(_filtered[i]),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _filterChip(String label, String value) {
-    final selected = _filter == value;
-    return ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      selected: selected,
-      onSelected: (_) => setState(() => _filter = value),
-      selectedColor: AppColors.primary.withOpacity(0.15),
+              Expanded(
+                child: filtered.isEmpty
+                    ? const EmptyState(
+                  icon: Icons.check_circle_outline,
+                  title: 'No jobs here',
+                  subtitle: 'Jobs will appear here in real time',
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) => _ticketTile(filtered[i]),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -151,7 +97,6 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
             ),
           ),
         );
-        _load();
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -182,42 +127,6 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
                     ),
                   ),
                 ),
-                if (isUnclaimed)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'UNCLAIMED',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.warning,
-                      ),
-                    ),
-                  )
-                else if (isMine)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'MINE',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ),
                 StatusBadge(status: t.status),
               ],
             ),

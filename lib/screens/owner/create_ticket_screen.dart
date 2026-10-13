@@ -4,6 +4,7 @@ import '../../config/app_config.dart';
 import '../../config/theme.dart';
 import '../../models/site_model.dart';
 import '../../models/user_model.dart';
+import '../../services/chat_service.dart';
 import '../../services/image_service.dart';
 import '../../services/preset_service.dart';
 import '../../services/site_service.dart';
@@ -25,6 +26,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _presetService = PresetService();
   final _siteService = SiteService();
   final _imageService = ImageService();
+  final _chatService = ChatService();
 
   SiteModel? _selectedSite;
   Lane? _selectedLane;
@@ -224,7 +226,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
 
-    // 2. Process images (uploads to Firebase Storage only when enabled)
+    // 2. Upload images if any
     if (_selectedImages.isNotEmpty) {
       final urls = await _imageService.uploadImages(
         files: _selectedImages,
@@ -233,10 +235,18 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       );
 
       if (urls.isNotEmpty) {
+        // Save image URLs on the ticket
         await _ticketService.updateTicketFields(
           ticket.id,
           {'image_urls': urls},
         );
+
+        // Refresh ticket + update the chat summary (which already
+        // contains the ticket details) with the new images.
+        final updated = await _ticketService.getTicketById(ticket.id);
+        if (updated != null) {
+          await _chatService.refreshSummaryImages(updated);
+        }
       }
     }
 
@@ -503,7 +513,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   // ═══════════════════════════════════════════════
-  // SITE / LANE / DIRECTION — same as before
+  // SITE / LANE / DIRECTION
   // ═══════════════════════════════════════════════
 
   Widget _buildSiteDropdown() {

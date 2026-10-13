@@ -9,6 +9,9 @@ class ChatMessage {
   final String senderRole;
   final String message;
   final bool isSystem;
+  final List<String> imageUrls;
+  final List<String> attachmentUrls;      // NEW — documents/any files
+  final List<String> attachmentNames;     // NEW — display names
   final DateTime sentAt;
 
   ChatMessage({
@@ -20,12 +23,14 @@ class ChatMessage {
     required this.senderRole,
     required this.message,
     this.isSystem = false,
+    this.imageUrls = const [],
+    this.attachmentUrls = const [],
+    this.attachmentNames = const [],
     required this.sentAt,
   });
 
   String get displayRole {
     switch (senderRole) {
-      case 'client':         // ← backward compat
       case 'owner':
         return 'Site Owner';
       case 'operator':
@@ -57,6 +62,9 @@ class ChatMessage {
     'sender_role': senderRole,
     'message': message,
     'is_system': isSystem,
+    'image_urls': imageUrls,
+    'attachment_urls': attachmentUrls,
+    'attachment_names': attachmentNames,
     'sent_at': sentAt.toIso8601String(),
   };
 
@@ -69,8 +77,18 @@ class ChatMessage {
     senderRole: json['sender_role'] ?? '',
     message: json['message'] ?? '',
     isSystem: json['is_system'] == true,
+    imageUrls: _stringList(json['image_urls']),
+    attachmentUrls: _stringList(json['attachment_urls']),
+    attachmentNames: _stringList(json['attachment_names']),
     sentAt: json['sent_at'] is Timestamp
         ? (json['sent_at'] as Timestamp).toDate()
         : DateTime.now(),
   );
+
+  static List<String> _stringList(dynamic value) {
+    if (value == null) return [];
+    if (value is String) return value.isEmpty ? [] : [value];
+    if (value is List) return value.map((e) => e.toString()).toList();
+    return [];
+  }
 }

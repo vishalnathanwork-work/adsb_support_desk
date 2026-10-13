@@ -3,6 +3,7 @@ import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../services/user_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
 import 'widgets/user_form_sheet.dart';
 import 'widgets/user_actions_sheet.dart';
 
@@ -53,14 +54,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       final roleMatch = _filterRole == 'all' || u['role'] == _filterRole;
 
       final isActive = u['is_active'] ?? true;
-      final statusMatch =
-      _filterStatus == 'active' ? isActive : !isActive;
+      final statusMatch = _filterStatus == 'active' ? isActive : !isActive;
 
       final name = (u['name'] ?? '').toString().toLowerCase();
       final email = (u['email'] ?? '').toString().toLowerCase();
       final company = (u['company'] ?? '').toString().toLowerCase();
-      final searchMatch =
-          q.isEmpty || name.contains(q) || email.contains(q) || company.contains(q);
+      final searchMatch = q.isEmpty ||
+          name.contains(q) ||
+          email.contains(q) ||
+          company.contains(q);
 
       return roleMatch && statusMatch && searchMatch;
     }).toList();
@@ -96,7 +98,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               SizedBox(height: 12),
               Text(
                 'Once Cloud Functions are enabled, this button will create users directly.',
-                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                    fontSize: 12, fontStyle: FontStyle.italic),
               ),
             ],
           ),
@@ -139,11 +142,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final activeCount = _all.where((u) => u['is_active'] == true).length;
+    final inactiveCount =
+        _all.where((u) => u['is_active'] == false).length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('User Management'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _load,
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -154,7 +164,78 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       ),
       body: Column(
         children: [
-          _buildFilterBar(),
+          // ─── Search ───
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(_applyFilters),
+              decoration: const InputDecoration(
+                hintText: 'Search by name, email, or company...',
+                prefixIcon: Icon(Icons.search),
+                filled: true,
+              ),
+            ),
+          ),
+
+          // ─── Role filter ───
+          FilterChipRow(
+            selectedValue: _filterRole,
+            onSelected: (v) {
+              setState(() {
+                _filterRole = v;
+                _applyFilters();
+              });
+            },
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            options: const [
+              FilterOption(label: 'All Roles', value: 'all'),
+              FilterOption(label: 'Site Owners', value: 'owner'),
+              FilterOption(label: 'Site Operators', value: 'operator'),
+            ],
+          ),
+
+          // ─── Status filter ───
+          FilterChipRow(
+            selectedValue: _filterStatus,
+            onSelected: (v) {
+              setState(() {
+                _filterStatus = v;
+                _applyFilters();
+              });
+            },
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            options: [
+              FilterOption(
+                label: 'Active',
+                value: 'active',
+                count: activeCount,
+              ),
+              FilterOption(
+                label: 'Inactive',
+                value: 'inactive',
+                count: inactiveCount,
+              ),
+            ],
+          ),
+
+          // ─── List ───
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -167,7 +248,12 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  80,
+                ),
                 itemCount: _filtered.length,
                 itemBuilder: (context, i) =>
                     _userCard(_filtered[i]),
@@ -179,184 +265,158 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Widget _buildFilterBar() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      color: Colors.white,
-      child: Column(
-        children: [
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(_applyFilters),
-            decoration: const InputDecoration(
-              hintText: 'Search by name, email, or company...',
-              prefixIcon: Icon(Icons.search),
-              filled: true,
-            ),
-          ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _chip('All Roles', 'all', _filterRole, (v) {
-                  setState(() {
-                    _filterRole = v;
-                    _applyFilters();
-                  });
-                }),
-                _chip('Clients', 'owner', _filterRole, (v) {
-                  setState(() {
-                    _filterRole = v;
-                    _applyFilters();
-                  });
-                }),
-                _chip('Operators', 'operator', _filterRole, (v) {
-                  setState(() {
-                    _filterRole = v;
-                    _applyFilters();
-                  });
-                }),
-                const SizedBox(width: 12),
-                _chip('Active', 'active', _filterStatus, (v) {
-                  setState(() {
-                    _filterStatus = v;
-                    _applyFilters();
-                  });
-                }),
-                _chip('Inactive', 'inactive', _filterStatus, (v) {
-                  setState(() {
-                    _filterStatus = v;
-                    _applyFilters();
-                  });
-                }),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(
-      String label, String value, String current, Function(String) onSelect) {
-    final selected = current == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        selected: selected,
-        onSelected: (_) => onSelect(value),
-        selectedColor: AppColors.primary.withOpacity(0.15),
-      ),
-    );
-  }
-
   Widget _userCard(Map<String, dynamic> u) {
     final isActive = u['is_active'] ?? true;
     final role = u['role'] ?? 'owner';
     final color = role == 'operator' ? AppColors.accent : AppColors.primary;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: ListTile(
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor:
-          isActive ? color.withOpacity(0.15) : AppColors.divider,
-          child: Text(
-            (u['name'] ?? '?').toString().substring(0, 1).toUpperCase(),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isActive ? color : AppColors.textSecondary,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openEditForm(u),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Row(
+              children: [
+                // ─── Avatar ───
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: isActive
+                      ? color.withOpacity(0.15)
+                      : AppColors.divider,
+                  child: Text(
+                    (u['name'] ?? '?')
+                        .toString()
+                        .substring(0, 1)
+                        .toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isActive
+                          ? color
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+
+                // ─── Info ───
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              u['name'] ?? '—',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: isActive
+                                    ? AppColors.textPrimary
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          if (!isActive)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.errorLight,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadii.pill,
+                                ),
+                              ),
+                              child: const Text(
+                                'INACTIVE',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.error,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        u['email'] ?? '—',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _badge(
+                            role == 'owner' ? 'Site Owner' : 'Site Operator',
+                            color,
+                          ),
+                          if ((u['company'] ?? '')
+                              .toString()
+                              .isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                u['company'],
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textTertiary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ─── Actions ───
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: AppColors.textSecondary,
+                  ),
+                  onPressed: () => _openActions(u),
+                ),
+              ],
             ),
           ),
         ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                u['name'] ?? '—',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isActive
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ),
-            if (!isActive)
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'INACTIVE',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.error,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 3),
-            Text(u['email'] ?? '—',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                _badge(role == 'owner' ? 'Client' : 'Operator', color),
-                if ((u['company'] ?? '').toString().isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      u['company'],
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
-          onPressed: () => _openActions(u),
-        ),
-        onTap: () => _openEditForm(u),
       ),
     );
   }
 
   Widget _badge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(
         text,
         style: TextStyle(
-            fontSize: 10, color: color, fontWeight: FontWeight.w600),
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

@@ -5,6 +5,12 @@
 <key>NSAppTransportSecurity</key>
 <dict><key>NSAllowsArbitraryLoads</key><true/></dict>
     <key>NSCameraUsageDescription</key>
+    <key>UISupportsDocumentBrowser</key>
+    <false/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
     <string>We need camera access to take photos of the issue.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>We need photo library access to attach images to tickets.</string>

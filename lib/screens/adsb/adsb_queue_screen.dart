@@ -3,9 +3,10 @@ import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/status_badge.dart';
 import '../../utils/date_formatter.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
+import '../../widgets/status_badge.dart';
 import 'adsb_ticket_action_screen.dart';
 
 class AdsbQueueScreen extends StatefulWidget {
@@ -31,9 +32,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
-
     final list = await _service.getActiveTickets();
-
     if (!mounted) return;
     setState(() {
       _tickets = list;
@@ -41,6 +40,19 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
     });
   }
 
+  // ─── Counts ───
+  int get _pendingCount =>
+      _tickets.where((t) => t.status == 'pending').length;
+
+  int get _withTtCount =>
+      _tickets.where((t) => t.status == 'verified').length;
+
+  int get _onsiteCount => _tickets
+      .where((t) =>
+  t.status == 'pending_onsite' || t.status == 'in_progress')
+      .length;
+
+  // ─── Filtered list ───
   List<Ticket> get _filtered {
     switch (_filter) {
       case 'pending':
@@ -61,15 +73,6 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount =
-        _tickets.where((t) => t.status == 'pending').length;
-    final withTtCount =
-        _tickets.where((t) => t.status == 'verified').length;
-    final onsiteCount = _tickets
-        .where((t) =>
-    t.status == 'pending_onsite' || t.status == 'in_progress')
-        .length;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Verification Queue'),
@@ -82,25 +85,31 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.white,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _filterChip('All Active', 'active', null),
-                  const SizedBox(width: 8),
-                  _filterChip('Pending', 'pending', pendingCount),
-                  const SizedBox(width: 8),
-                  _filterChip('With TT', 'with_tt', withTtCount),
-                  const SizedBox(width: 8),
-                  _filterChip('On-Site', 'onsite', onsiteCount),
-                ],
+          // ─── Filter chips ───
+          FilterChipRow(
+            selectedValue: _filter,
+            onSelected: (v) => setState(() => _filter = v),
+            options: [
+              const FilterOption(label: 'All Active', value: 'active'),
+              FilterOption(
+                label: 'Pending',
+                value: 'pending',
+                count: _pendingCount,
               ),
-            ),
+              FilterOption(
+                label: 'With TT',
+                value: 'with_tt',
+                count: _withTtCount,
+              ),
+              FilterOption(
+                label: 'On-Site',
+                value: 'onsite',
+                count: _onsiteCount,
+              ),
+            ],
           ),
+
+          // ─── List ───
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -108,12 +117,12 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ? const EmptyState(
               icon: Icons.check_circle_outline,
               title: 'All caught up!',
-              subtitle: 'No tickets in the queue',
+              subtitle: 'No tickets in this view',
             )
                 : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 itemCount: _filtered.length,
                 itemBuilder: (context, i) =>
                     _ticketTile(_filtered[i]),
@@ -125,145 +134,108 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
     );
   }
 
-  Widget _filterChip(String label, String value, int? count) {
-    final selected = _filter == value;
-    final display = count == null ? label : '$label ($count)';
-
-    return ChoiceChip(
-      label: Text(display, style: const TextStyle(fontSize: 12)),
-      selected: selected,
-      onSelected: (_) => setState(() => _filter = value),
-      selectedColor: AppColors.primary.withOpacity(0.15),
-    );
-  }
-
   Widget _ticketTile(Ticket t) {
-    final isWithTT = t.status == 'verified';
-    final isOnsite = t.status == 'pending_onsite' || t.status == 'in_progress';
-    final isResolved = t.status == 'resolved';
-    final isPending = t.status == 'pending';
-
-    Color borderColor;
-    if (isWithTT) {
-      borderColor = const Color(0xFF5E35B1).withOpacity(0.4);
-    } else if (isOnsite) {
-      borderColor = AppColors.primary.withOpacity(0.4);
-    } else if (isResolved) {
-      borderColor = AppColors.success.withOpacity(0.4);
-    } else {
-      borderColor = AppColors.divider;
-    }
-
-    return InkWell(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AdsbTicketActionScreen(
-              ticketId: t.id,
-              user: widget.user,
-            ),
-          ),
-        );
-        _load();
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: borderColor,
-            width: isWithTT || isOnsite || isResolved ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    t.id,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AdsbTicketActionScreen(
+                  ticketId: t.id,
+                  user: widget.user,
                 ),
-                if (isWithTT)
-                  _badge('WITH TT', const Color(0xFF5E35B1))
-                else if (isOnsite)
-                  _badge('ON-SITE', AppColors.primary)
-                else if (isResolved)
-                    _badge('RESOLVED', AppColors.success),
-                const SizedBox(width: 6),
-                StatusBadge(status: t.status),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              t.productType,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
               ),
+            );
+            _load();
+          },
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              boxShadow: AppShadows.soft,
             ),
-            const SizedBox(height: 3),
-            Text(
-              t.productIssue,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.person_outline,
-                    size: 14, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    '${t.createdByName} · ${t.siteName} — ${t.laneName}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+                // ─── ID + Status (SINGLE badge) ───
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        t.id,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    StatusBadge(status: t.status),
+                  ],
                 ),
+                const SizedBox(height: 12),
+
+                // ─── Product + issue ───
                 Text(
-                  DateFormatter.relative(t.createdAt),
+                  t.productType,
                   style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
                   ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  t.productIssue,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+
+                // ─── Reporter + location + time ───
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person_outline,
+                      size: 12,
+                      color: AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        '${t.createdByName} · ${t.siteName} · ${t.laneName}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      DateFormatter.relative(t.createdAt),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _badge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: color,
+          ),
         ),
       ),
     );

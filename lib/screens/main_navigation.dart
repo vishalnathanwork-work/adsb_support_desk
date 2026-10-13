@@ -6,7 +6,11 @@ class MainNavigation extends StatefulWidget {
   final UserModel user;
   final List<NavTab> tabs;
 
-  const MainNavigation({super.key, required this.user, required this.tabs});
+  const MainNavigation({
+    super.key,
+    required this.user,
+    required this.tabs,
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -17,7 +21,11 @@ class NavTab {
   final IconData icon;
   final Widget page;
 
-  NavTab({required this.label, required this.icon, required this.page});
+  NavTab({
+    required this.label,
+    required this.icon,
+    required this.page,
+  });
 }
 
 class _MainNavigationState extends State<MainNavigation> {
@@ -25,7 +33,6 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    // Safely reset index if tabs list changes
     if (_index >= widget.tabs.length) _index = 0;
 
     return Scaffold(
@@ -33,19 +40,32 @@ class _MainNavigationState extends State<MainNavigation> {
         index: _index,
         children: widget.tabs.map((t) => t.page).toList(),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.primary.withOpacity(0.15),
-        destinations: widget.tabs
-            .map(
-              (t) => NavigationDestination(
-            icon: Icon(t.icon),
-            label: t.label,
-          ),
-        )
-            .toList(),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x0A000000),
+              blurRadius: 20,
+              offset: Offset(0, -4),
+            ),
+          ],
+        ),
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          destinations: widget.tabs
+              .map(
+                (t) => NavigationDestination(
+              icon: Icon(t.icon),
+              selectedIcon: Icon(t.icon, color: AppColors.primary),
+              label: t.label,
+            ),
+          )
+              .toList(),
+        ),
       ),
     );
   }

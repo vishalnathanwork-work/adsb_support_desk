@@ -4,6 +4,7 @@ import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
 import '../../widgets/ticket_card.dart';
 import 'create_ticket_screen.dart';
 import 'ticket_detail_screen.dart';
@@ -25,105 +26,133 @@ class TicketListScreen extends StatefulWidget {
 class _TicketListScreenState extends State<TicketListScreen> {
   final _service = TicketService();
 
-  List<Ticket> _tickets = [];
-  bool _isLoading = true;
   String _filter = 'active';
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _isLoading = true);
-
-    List<Ticket> list;
-
-    // Owner / operator see every active ticket at their sites.
-    if ((widget.user.isOwner || widget.user.isOperator) &&
-        widget.user.siteIds.isNotEmpty) {
-      list = await _service.getActiveTicketsForSites(widget.user.siteIds);
-    } else {
-      // Fallback for other roles.
-      list = await _service.getMyTickets(widget.user.email);
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _tickets = list;
-      _isLoading = false;
-    });
-  }
-
-  List<Ticket> get _filtered {
-    switch (_filter) {
-      case 'all':
-        return _tickets;
-      case 'active':
-      default:
-        return _tickets
-            .where((t) =>
-        t.status != 'closed' && t.status != 'cancelled')
-            .toList();
-    }
-  }
-
   Future<void> _openCreate() async {
-    final created = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => CreateTicketScreen(user: widget.user),
       ),
     );
-    if (created == true) _load();
+    // No reload — the stream handles new tickets.
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeCount = _tickets
-        .where((t) => t.status != 'closed' && t.status != 'cancelled')
-        .length;
+    // ─── No sites case ───
+    if (widget.user.siteIds.isEmpty) {
+      final empty = const EmptyState(
+        icon: Icons.location_off_outlined,
+        title: 'No sites assigned',
+        subtitle: 'Contact admin',
+      );
 
-    final body = _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : _tickets.isEmpty
-        ? const EmptyState(
-      icon: Icons.inbox_outlined,
-      title: 'No tickets yet',
-      subtitle: 'Tap + to create a new ticket',
-    )
-        : Column(
-      children: [
-        _buildFilterRow(activeCount),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _load,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _filtered.length,
-              itemBuilder: (context, i) {
-                final ticket = _filtered[i];
-                return TicketCard(
-                  ticket: ticket,
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TicketDetailScreen(
-                          ticketId: ticket.id,
-                          user: widget.user,
-                        ),
-                      ),
-                    );
-                    _load();
-                  },
-                );
-              },
+      if (!widget.showAppBar) return empty;
+
+      return Scaffold(
+        appBar: AppBar(title: const Text('Tickets')),
+        body: empty,
+      );
+    }
+
+    // ─── Live list ───
+    final body = StreamBuilder<List<Ticket>>(
+      stream: _service.streamActiveTicketsForSites(widget.user.siteIds),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline,
+                      size: 48, color: AppColors.error),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Could not load tickets',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-      ],
+          );
+        }
+
+        final tickets = snapshot.data ?? [];
+
+        final activeTickets = tickets
+            .where((t) => t.status != 'closed' && t.status != 'cancelled')
+            .toList();
+
+        final filtered = _filter == 'active' ? activeTickets : tickets;
+
+        if (tickets.isEmpty) {
+          return const EmptyState(
+            icon: Icons.inbox_outlined,
+            title: 'No tickets yet',
+            subtitle: 'Tap + to create a new ticket',
+          );
+        }
+
+        return Column(
+          children: [
+            FilterChipRow(
+              selectedValue: _filter,
+              onSelected: (v) => setState(() => _filter = v),
+              options: [
+                FilterOption(
+                  label: 'Active',
+                  value: 'active',
+                  count: activeTickets.length,
+                ),
+                FilterOption(
+                  label: 'All',
+                  value: 'all',
+                  count: tickets.length,
+                ),
+              ],
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.inbox_outlined,
+                      title: 'No active tickets',
+                      subtitle: 'Switch to "All" to see closed tickets',
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) => TicketCard(
+                        ticket: filtered[i],
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TicketDetailScreen(
+                                ticketId: filtered[i].id,
+                                user: widget.user,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        );
+      },
     );
 
     if (!widget.showAppBar) return body;
@@ -137,30 +166,6 @@ class _TicketListScreenState extends State<TicketListScreen> {
         label: const Text('New Ticket'),
       ),
       body: body,
-    );
-  }
-
-  Widget _buildFilterRow(int activeCount) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.white,
-      child: Row(
-        children: [
-          _filterChip('Active ($activeCount)', 'active'),
-          const SizedBox(width: 8),
-          _filterChip('All', 'all'),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterChip(String label, String value) {
-    final selected = _filter == value;
-    return ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      selected: selected,
-      onSelected: (_) => setState(() => _filter = value),
-      selectedColor: AppColors.primary.withOpacity(0.15),
     );
   }
 }

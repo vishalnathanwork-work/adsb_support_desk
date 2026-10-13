@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../config/app_config.dart';
 import '../../config/theme.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
+import '../../services/chat_service.dart';
 import '../../services/image_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/ticket_service.dart';
-import '../../widgets/image_gallery.dart';
 import '../../widgets/status_badge.dart';
 import '../adsb/adsb_chat_screen.dart';
 
@@ -27,6 +27,8 @@ class OnsiteJobScreen extends StatefulWidget {
 class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
   final _service = TicketService();
   final _imageService = ImageService();
+  final _chatService = ChatService();
+  final _notifService = NotificationService();
   Ticket? _ticket;
   bool _isLoading = true;
   bool _isWorking = false;
@@ -149,12 +151,31 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
       completionImageUrl: result['imageUrl'] as String?,
     );
 
+    // Update chat summary with completion photo
+    final imageUrl = result['imageUrl'] as String?;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final updated = await _service.getTicketById(widget.ticketId);
+      if (updated != null) {
+        await _chatService.refreshSummaryImages(updated);
+      }
+    }
+
+    if (_ticket != null) {
+      await _notifService.addNotification(
+        userId: _ticket!.createdBy,
+        ticketId: _ticket!.id,
+        title: 'Issue Resolved',
+        body: 'Your issue has been resolved. Please confirm.',
+        type: 'resolved',
+      );
+    }
+
     if (!mounted) return;
     setState(() => _isWorking = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Job marked completed. Awaiting client confirmation.'),
+        content: Text('Job completed. Awaiting owner confirmation.'),
         backgroundColor: AppColors.success,
       ),
     );
@@ -219,27 +240,13 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 _row('Parking',
                     '${t.laneName} (${t.laneDirectionDisplay})'),
                 _row('Product', t.productType),
-                _row('Issue', t.productIssue),
+                if (t.productIssue.isNotEmpty)
+                  _row('Issue', t.productIssue),
                 if (t.description.isNotEmpty)
                   _row('Description', t.description),
               ],
             ),
 
-            // ─── Reporter's photos ───
-            if (t.imageUrls.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _card(
-                title: 'Reported Photo Evidence',
-                children: [
-                  ImageGallery(
-                    urls: t.imageUrls,
-                    title: 'Reported Photos',
-                  ),
-                ],
-              ),
-            ],
-
-            // ─── TT advice ───
             if (t.rootCause != null || t.solutionApplied != null) ...[
               const SizedBox(height: 16),
               _card(
@@ -254,17 +261,12 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               ),
             ],
 
-            // ─── Completion evidence (if already submitted) ───
-            if (t.completionImageUrl != null &&
-                t.completionImageUrl!.isNotEmpty) ...[
+            if (t.imageUrls.isNotEmpty) ...[
               const SizedBox(height: 16),
               _card(
-                title: 'Completion Evidence',
+                title: 'Reported Photo Evidence',
                 children: [
-                  ImageGallery(
-                    urls: [t.completionImageUrl!],
-                    title: 'Completion Evidence',
-                  ),
+                  _imageGrid(t.imageUrls),
                 ],
               ),
             ],
@@ -325,26 +327,6 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               SizedBox(
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: _openChat,
-                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  label: const Text(
-                    'Open Chat',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
                   onPressed: _isWorking ? null : _openResolutionForm,
                   icon: const Icon(Icons.check_circle_outline),
                   label: _isWorking
@@ -368,26 +350,6 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 ),
               ),
             ] else ...[
-              SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _openChat,
-                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  label: const Text(
-                    'Open Chat',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -412,6 +374,48 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _imageGrid(List<String> urls) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: urls.map((url) {
+        if (url.startsWith('local://')) {
+          final path = url.replaceFirst('local://', '');
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.file(
+              File(path),
+              width: 80,
+              height: 80,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 80,
+                height: 80,
+                color: AppColors.divider,
+                child: const Icon(Icons.broken_image_outlined),
+              ),
+            ),
+          );
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            url,
+            width: 80,
+            height: 80,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              width: 80,
+              height: 80,
+              color: AppColors.divider,
+              child: const Icon(Icons.broken_image_outlined),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -462,7 +466,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 }
 
 // ═══════════════════════════════════════════════
-// RESOLUTION SHEET — with completion evidence
+// RESOLUTION SHEET — with REQUIRED completion evidence
 // ═══════════════════════════════════════════════
 
 class _ResolutionSheet extends StatefulWidget {
@@ -491,6 +495,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
   File? _evidenceImage;
   bool _uploading = false;
+  String? _evidenceError;
 
   @override
   void dispose() {
@@ -503,14 +508,20 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
   Future<void> _pickEvidence() async {
     final file = await widget.imageService.pickFromCamera();
     if (file != null && mounted) {
-      setState(() => _evidenceImage = file);
+      setState(() {
+        _evidenceImage = file;
+        _evidenceError = null;
+      });
     }
   }
 
   Future<void> _pickEvidenceFromGallery() async {
     final files = await widget.imageService.pickFromGallery(limit: 1);
     if (files.isNotEmpty && mounted) {
-      setState(() => _evidenceImage = files.first);
+      setState(() {
+        _evidenceImage = files.first;
+        _evidenceError = null;
+      });
     }
   }
 
@@ -561,7 +572,21 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
   Future<void> _submit() async {
     if (_rootCause == null || _solution == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill both fields')),
+        const SnackBar(
+          content: Text('Please fill root cause and solution'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_evidenceImage == null) {
+      setState(() => _evidenceError = 'Completion photo is required');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please attach a completion photo'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
@@ -573,16 +598,23 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
         ? _customSolution.text.trim()
         : _solution!;
 
-    String? imageUrl;
-    if (_evidenceImage != null) {
-      setState(() => _uploading = true);
-      imageUrl = await widget.imageService.uploadImage(
-        file: _evidenceImage!,
-        folder: 'completion_evidence',
-        ticketId: widget.ticketId,
+    setState(() => _uploading = true);
+    final imageUrl = await widget.imageService.uploadImage(
+      file: _evidenceImage!,
+      folder: 'completion_evidence',
+      ticketId: widget.ticketId,
+    );
+    if (!mounted) return;
+    setState(() => _uploading = false);
+
+    if (imageUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to upload evidence. Try again.'),
+          backgroundColor: AppColors.error,
+        ),
       );
-      if (!mounted) return;
-      setState(() => _uploading = false);
+      return;
     }
 
     if (!mounted) return;
@@ -623,19 +655,29 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Resolution Form',
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              'Job Completion',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 20),
 
-            const Text('Root Cause',
-                style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
+            // ─── Root cause ───
+            const Text(
+              'Root Cause',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _rootCause,
-              decoration:
-              const InputDecoration(hintText: 'Select root cause'),
+              decoration: const InputDecoration(
+                hintText: 'Select root cause',
+              ),
               items: widget.rootCauses
                   .map((r) =>
                   DropdownMenuItem(value: r, child: Text(r)))
@@ -647,20 +689,27 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
               TextField(
                 controller: _customRootCause,
                 decoration: const InputDecoration(
-                    hintText: 'Describe root cause'),
+                  hintText: 'Describe root cause',
+                ),
               ),
             ],
 
             const SizedBox(height: 16),
 
-            const Text('Solution Applied',
-                style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
+            // ─── Solution ───
+            const Text(
+              'Solution Applied',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _solution,
-              decoration:
-              const InputDecoration(hintText: 'Select solution'),
+              decoration: const InputDecoration(
+                hintText: 'Select solution',
+              ),
               items: widget.solutions
                   .map((s) =>
                   DropdownMenuItem(value: s, child: Text(s)))
@@ -672,29 +721,72 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
               TextField(
                 controller: _customSolution,
                 decoration: const InputDecoration(
-                    hintText: 'Describe solution'),
+                  hintText: 'Describe solution',
+                ),
               ),
             ],
 
             const SizedBox(height: 16),
 
-            const Text('Additional Notes (Optional)',
-                style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
+            // ─── Notes ───
+            const Text(
+              'Additional Notes (Optional)',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: _notesController,
               maxLines: 3,
               decoration: const InputDecoration(
-                  hintText: 'Any other notes'),
+                hintText: 'Any other notes',
+              ),
             ),
 
             const SizedBox(height: 16),
 
-            const Text('Completion Evidence (Optional)',
-                style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
+            // ─── Completion Evidence (REQUIRED) ───
+            Row(
+              children: [
+                const Text(
+                  'Completion Photo',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorLight,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'REQUIRED',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.error,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Take a photo showing the resolved work.',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(height: 8),
+
             if (_evidenceImage == null)
               InkWell(
                 onTap: _showSourceSheet,
@@ -702,23 +794,48 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: _evidenceError != null
+                        ? AppColors.error.withOpacity(0.06)
+                        : AppColors.background,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.divider),
+                    border: Border.all(
+                      color: _evidenceError != null
+                          ? AppColors.error
+                          : AppColors.divider,
+                      width: _evidenceError != null ? 2 : 1,
+                    ),
                   ),
-                  child: const Column(
+                  child: Column(
                     children: [
-                      Icon(Icons.add_a_photo_outlined,
-                          size: 28, color: AppColors.primary),
-                      SizedBox(height: 6),
+                      Icon(
+                        Icons.add_a_photo_outlined,
+                        size: 28,
+                        color: _evidenceError != null
+                            ? AppColors.error
+                            : AppColors.primary,
+                      ),
+                      const SizedBox(height: 6),
                       Text(
                         'Add completion photo',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
+                          color: _evidenceError != null
+                              ? AppColors.error
+                              : AppColors.primary,
                         ),
                       ),
+                      if (_evidenceError != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _evidenceError!,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -755,11 +872,40 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
                       ),
                     ),
                   ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle,
+                              size: 12, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            'Photo attached',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
 
             const SizedBox(height: 24),
 
+            // ─── Submit ───
             SizedBox(
               height: 52,
               width: double.infinity,
@@ -779,10 +925,13 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
                   child: CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2),
                 )
-                    : const Text('Submit Resolution',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600)),
+                    : const Text(
+                  'Submit Completion',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],

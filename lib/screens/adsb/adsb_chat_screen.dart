@@ -1,15 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../config/app_config.dart';
 import '../../config/theme.dart';
 import '../../models/chat_message.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/chat_service.dart';
+import '../../services/image_service.dart';
 import '../../services/ticket_service.dart';
 import '../../widgets/chat_bubble.dart';
 
-/// Unified ticket chat — used by EVERYONE.
-/// Site Owner, Site Operator, ADSB Support, TT, On-Site, Admin.
-/// TT/On-Site/ADSB all appear as "ADSB Team" to external users.
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
   final UserModel user;
@@ -27,12 +27,18 @@ class AdsbChatScreen extends StatefulWidget {
 class _AdsbChatScreenState extends State<AdsbChatScreen> {
   final _chatService = ChatService();
   final _ticketService = TicketService();
+  final _imageService = ImageService();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
 
   Ticket? _ticket;
   bool _summaryReady = false;
   bool _isSending = false;
+  bool _isUploading = false;
+
+  // Staged attachments for the next message
+  final List<File> _pendingImages = [];
+  final List<PickedFile> _pendingDocs = [];
 
   @override
   void initState() {
@@ -71,36 +77,196 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     });
   }
 
-  /// Chat is open while the ticket is active.
-  /// Read-only once the ticket is closed or cancelled.
   bool get _chatOpen {
     if (_ticket == null) return false;
     return _ticket!.status != 'closed' && _ticket!.status != 'cancelled';
   }
 
+  int get _attachmentCount => _pendingImages.length + _pendingDocs.length;
+
+  // ─────────────────────────────────────────
+  // ATTACH — picker source sheet
+  // ─────────────────────────────────────────
+
+  void _showAttachSheet() {
+    if (_attachmentCount >= AppConfig.maxChatAttachments) {
+      _snack('Maximum ${AppConfig.maxChatAttachments} attachments per message');
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Attach',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take Photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickCamera();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose Photos'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickGallery();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file),
+              title: const Text('Choose Document'),
+              subtitle: const Text(
+                'PDF, Word, Excel, ZIP, etc.',
+                style: TextStyle(fontSize: 11),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _pickDocument();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickCamera() async {
+    if (_attachmentCount >= AppConfig.maxChatAttachments) {
+      _snack('Maximum ${AppConfig.maxChatAttachments} attachments');
+      return;
+    }
+    final file = await _imageService.pickFromCamera();
+    if (file != null && mounted) {
+      setState(() => _pendingImages.add(file));
+    }
+  }
+
+  Future<void> _pickGallery() async {
+    final remaining =
+        AppConfig.maxChatAttachments - _attachmentCount;
+    if (remaining <= 0) {
+      _snack('Maximum ${AppConfig.maxChatAttachments} attachments');
+      return;
+    }
+    final files = await _imageService.pickFromGallery(limit: remaining);
+    if (files.isNotEmpty && mounted) {
+      setState(() => _pendingImages.addAll(files));
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    if (_attachmentCount >= AppConfig.maxChatAttachments) {
+      _snack('Maximum ${AppConfig.maxChatAttachments} attachments');
+      return;
+    }
+    final doc = await _imageService.pickDocument();
+    if (doc != null && mounted) {
+      setState(() => _pendingDocs.add(doc));
+    }
+  }
+
+  void _removePendingImage(int index) {
+    setState(() => _pendingImages.removeAt(index));
+  }
+
+  void _removePendingDoc(int index) {
+    setState(() => _pendingDocs.removeAt(index));
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  // ─────────────────────────────────────────
+  // SEND
+  // ─────────────────────────────────────────
+
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _isSending) return;
+    if (text.isEmpty && _attachmentCount == 0) return;
+    if (_isSending || _isUploading) return;
     if (!_chatOpen) return;
 
     setState(() => _isSending = true);
 
-    // Auto-escalate: if ADSB replies first on a pending ticket,
-    // the ticket moves to "verified" so TT/on-site know to review.
+    // Auto-escalate on first ADSB message
     final isAdsb = widget.user.role == 'adsb';
     if (isAdsb && _ticket != null && _ticket!.status == 'pending') {
       await _ticketService.autoEscalateIfNeeded(
         ticketId: widget.ticketId,
-        reason: text,
+        reason: text.isEmpty ? 'Photo attached' : text,
         adsbEmail: widget.user.email,
         adsbName: widget.user.name,
       );
-
-      final fresh = await _ticketService.getTicketById(widget.ticketId);
+      final fresh =
+      await _ticketService.getTicketById(widget.ticketId);
       if (mounted) setState(() => _ticket = fresh);
     }
 
+    // Upload images
+    List<String> imageUrls = [];
+    if (_pendingImages.isNotEmpty) {
+      setState(() => _isUploading = true);
+      imageUrls = await _imageService.uploadImages(
+        files: _pendingImages,
+        folder: 'chat_attachments',
+        ticketId: widget.ticketId,
+      );
+    }
+
+    // Upload documents
+    List<String> attachmentUrls = [];
+    List<String> attachmentNames = [];
+    for (final doc in _pendingDocs) {
+      final url = await _imageService.uploadDocument(
+        file: doc.file,
+        ticketId: widget.ticketId,
+        originalName: doc.name,
+      );
+      if (url != null) {
+        attachmentUrls.add(url);
+        attachmentNames.add(doc.name);
+      }
+    }
+
     _controller.clear();
+    _pendingImages.clear();
+    _pendingDocs.clear();
 
     await _chatService.sendMessage(
       ticketId: widget.ticketId,
@@ -108,11 +274,21 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       senderName: widget.user.name,
       senderRole: widget.user.role,
       message: text,
+      imageUrls: imageUrls,
+      attachmentUrls: attachmentUrls,
+      attachmentNames: attachmentNames,
     );
 
     if (!mounted) return;
-    setState(() => _isSending = false);
+    setState(() {
+      _isSending = false;
+      _isUploading = false;
+    });
   }
+
+  // ─────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +314,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
       body: Column(
         children: [
-          // ─── Closed banner ───
           if (!_chatOpen && _ticket != null)
             Container(
               width: double.infinity,
@@ -146,11 +321,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               color: AppColors.textSecondary.withOpacity(0.1),
               child: const Row(
                 children: [
-                  Icon(
-                    Icons.lock_outline,
-                    size: 14,
-                    color: AppColors.textSecondary,
-                  ),
+                  Icon(Icons.lock_outline,
+                      size: 14, color: AppColors.textSecondary),
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -165,8 +337,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                 ],
               ),
             ),
-
-          // ─── Messages ───
           Expanded(
             child: !_summaryReady
                 ? const Center(child: CircularProgressIndicator())
@@ -204,7 +374,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, i) {
                     final m = messages[i];
-                    final isMe = m.senderEmail == widget.user.email;
+                    final isMe =
+                        m.senderEmail == widget.user.email;
                     return ChatBubble(message: m, isMe: isMe);
                   },
                 );
@@ -212,10 +383,19 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
             ),
           ),
 
+          // ─── Pending attachments preview ───
+          if (_attachmentCount > 0)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 8),
+              child: _buildPendingAttachments(),
+            ),
+
           // ─── Input row ───
           if (_chatOpen)
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(
@@ -225,13 +405,26 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               child: SafeArea(
                 top: false,
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    IconButton(
+                      icon: const Icon(Icons.attach_file),
+                      color: AppColors.primary,
+                      onPressed:
+                      _attachmentCount >=
+                          AppConfig.maxChatAttachments
+                          ? null
+                          : _showAttachSheet,
+                      tooltip: 'Attach file',
+                    ),
                     Expanded(
                       child: TextField(
                         controller: _controller,
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _send(),
                         enabled: !_isSending,
+                        minLines: 1,
+                        maxLines: 5,
                         decoration: const InputDecoration(
                           hintText: 'Type a message...',
                           border: InputBorder.none,
@@ -239,7 +432,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                         ),
                       ),
                     ),
-                    _isSending
+                    _isSending || _isUploading
                         ? const Padding(
                       padding: EdgeInsets.all(12),
                       child: SizedBox(
@@ -279,6 +472,129 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingAttachments() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ..._pendingImages.asMap().entries.map((entry) {
+            final index = entry.key;
+            final file = entry.value;
+            return _pendingThumb(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.file(
+                  file,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              onRemove: () => _removePendingImage(index),
+            );
+          }),
+          ..._pendingDocs.asMap().entries.map((entry) {
+            final index = entry.key;
+            final doc = entry.value;
+            return _pendingDocThumb(
+              name: doc.name,
+              onRemove: () => _removePendingDoc(index),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _pendingThumb({
+    required Widget child,
+    required VoidCallback onRemove,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Stack(
+        children: [
+          child,
+          Positioned(
+            top: -2,
+            right: -2,
+            child: InkWell(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.black87,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  size: 12,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pendingDocThumb({
+    required String name,
+    required VoidCallback onRemove,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Stack(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.insert_drive_file,
+                    size: 20, color: AppColors.primary),
+                const SizedBox(height: 2),
+                Text(
+                  name,
+                  style: const TextStyle(fontSize: 8),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: -2,
+            right: -2,
+            child: InkWell(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.black87,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  size: 12,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

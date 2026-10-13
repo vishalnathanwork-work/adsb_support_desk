@@ -553,6 +553,148 @@ class TicketService {
     }
   }
 
+  // ═══════════════════════════════════════════════
+// DASHBOARD COUNTS — live
+// ═══════════════════════════════════════════════
+
+  /// Live stream of ADSB dashboard counts.
+  /// Emits a small map with:
+  ///   verify  — pending + verified tickets
+  ///   onsite  — pending_onsite + in_progress
+  Stream<Map<String, int>> streamAdsbStats() {
+    return _col
+        .where('status', whereIn: [
+      'pending',
+      'verified',
+      'pending_onsite',
+      'in_progress',
+    ])
+        .snapshots()
+        .map((snapshot) {
+      int verify = 0;
+      int onsite = 0;
+      for (final doc in snapshot.docs) {
+        final status = doc.data()['status'] as String? ?? '';
+        if (status == 'pending' || status == 'verified') {
+          verify++;
+        } else if (status == 'pending_onsite' || status == 'in_progress') {
+          onsite++;
+        }
+      }
+      return {'verify': verify, 'onsite': onsite};
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+// LIVE STREAMS — auto-updating queues
+// ═══════════════════════════════════════════════
+
+  /// Live stream of every active ticket.
+  /// Used by ADSB verification queue.
+  Stream<List<Ticket>> streamActiveTickets() {
+    return _col
+        .where('status', whereIn: [
+      'pending',
+      'verified',
+      'pending_onsite',
+      'in_progress',
+      'resolved',
+      'reopened',
+    ])
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// Live stream of pending + verified (unclaimed queue).
+  Stream<List<Ticket>> streamVerificationQueue() {
+    return _col
+        .where('status', whereIn: ['pending', 'verified'])
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// Live stream of active tickets for a set of sites.
+  /// Used by owner/operator Tickets tab.
+  Stream<List<Ticket>> streamActiveTicketsForSites(List<String> siteIds) {
+    if (siteIds.isEmpty) {
+      return Stream.value([]);
+    }
+    // whereIn only supports up to 10 values. If more, fall back to
+    // reading all and filtering client-side.
+    if (siteIds.length > 10) {
+      return _col
+          .where('status', whereIn: [
+        'pending',
+        'verified',
+        'pending_onsite',
+        'in_progress',
+        'resolved',
+        'reopened',
+      ])
+          .snapshots()
+          .map((snapshot) {
+        final list = snapshot.docs
+            .map((doc) =>
+            Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+            .where((t) => siteIds.contains(t.siteId))
+            .toList();
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
+      });
+    }
+
+    return _col
+        .where('site_id', whereIn: siteIds)
+        .where('status', whereIn: [
+      'pending',
+      'verified',
+      'pending_onsite',
+      'in_progress',
+      'resolved',
+      'reopened',
+    ])
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// Live stream of on-site queue (pending_onsite + in_progress).
+  Stream<List<Ticket>> streamOnsiteQueue() {
+    return _col
+        .where('status', whereIn: ['pending_onsite', 'in_progress'])
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) {
+        // Unclaimed first
+        final aUnclaimed = a.status == 'pending_onsite';
+        final bUnclaimed = b.status == 'pending_onsite';
+        if (aUnclaimed != bUnclaimed) return aUnclaimed ? -1 : 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return list;
+    });
+  }
+
   Future<void> cancelTicket(String ticketId) async {
     await updateTicketFields(ticketId, {
       'status': 'cancelled',

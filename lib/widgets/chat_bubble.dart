@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import '../models/chat_message.dart';
 import '../utils/date_formatter.dart';
+import 'chat_attachment_view.dart';
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
@@ -16,10 +17,13 @@ class ChatBubble extends StatelessWidget {
   }
 
   // ─────────────────────────────────────────
-  // SYSTEM SUMMARY CARD
+  // SYSTEM CARD
   // ─────────────────────────────────────────
 
   Widget _systemCard() {
+    final hasAttachments = message.imageUrls.isNotEmpty ||
+        message.attachmentUrls.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Container(
@@ -60,14 +64,55 @@ class ChatBubble extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SelectableText(
-              message.message,
-              style: const TextStyle(
-                fontSize: 12,
-                height: 1.5,
-                fontFamily: 'monospace',
+            if (message.message.isNotEmpty)
+              SelectableText(
+                message.message,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  fontFamily: 'monospace',
+                ),
               ),
-            ),
+            if (hasAttachments) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.attach_file,
+                          size: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 5),
+                        const Text(
+                          'Attached Files',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ChatAttachmentView(
+                      imageUrls: message.imageUrls,
+                      attachmentUrls: message.attachmentUrls,
+                      attachmentNames: message.attachmentNames,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -80,10 +125,11 @@ class ChatBubble extends StatelessWidget {
 
   Widget _userBubble() {
     final isInternalSide = message.isInternalSender;
-
-    // Blue = ADSB family, Cyan = site team.
     final sideColor =
     isInternalSide ? AppColors.primary : AppColors.accent;
+
+    final hasAttachments = message.imageUrls.isNotEmpty ||
+        message.attachmentUrls.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -129,12 +175,29 @@ class ChatBubble extends StatelessWidget {
                     border:
                     isMe ? null : Border.all(color: AppColors.divider),
                   ),
-                  child: Text(
-                    message.message,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isMe ? Colors.white : AppColors.textPrimary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (message.message.isNotEmpty)
+                        Text(
+                          message.message,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isMe
+                                ? Colors.white
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      if (hasAttachments) ...[
+                        if (message.message.isNotEmpty)
+                          const SizedBox(height: 8),
+                        ChatAttachmentView(
+                          imageUrls: message.imageUrls,
+                          attachmentUrls: message.attachmentUrls,
+                          attachmentNames: message.attachmentNames,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 Padding(
@@ -155,9 +218,6 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  /// Sender label above the bubble.
-  /// - Internal (ADSB family): always shows "ADSB Support" — no real name.
-  /// - External (owner/operator): shows real name + role badge.
   Widget _senderHeader(Color sideColor) {
     if (message.isInternalSender) {
       return const Padding(

@@ -5,7 +5,6 @@ import '../models/ticket_model.dart';
 class ChatService {
   final _col = FirebaseFirestore.instance.collection('chat_messages');
 
-  /// Single thread per ticket. Always channel = 'ticket'.
   static const String channelId = 'ticket';
 
   // ═══════════════════════════════════════════════
@@ -32,7 +31,7 @@ class ChatService {
   }
 
   // ═══════════════════════════════════════════════
-  // SEND
+  // SEND — user message with optional attachments
   // ═══════════════════════════════════════════════
 
   Future<void> sendMessage({
@@ -41,8 +40,15 @@ class ChatService {
     required String senderName,
     required String senderRole,
     required String message,
+    List<String> imageUrls = const [],
+    List<String> attachmentUrls = const [],
+    List<String> attachmentNames = const [],
   }) async {
-    if (message.trim().isEmpty) return;
+    if (message.trim().isEmpty &&
+        imageUrls.isEmpty &&
+        attachmentUrls.isEmpty) {
+      return;
+    }
 
     try {
       await _col.add({
@@ -53,6 +59,9 @@ class ChatService {
         'sender_role': senderRole,
         'message': message.trim(),
         'is_system': false,
+        'image_urls': imageUrls,
+        'attachment_urls': attachmentUrls,
+        'attachment_names': attachmentNames,
         'sent_at': FieldValue.serverTimestamp(),
       });
     } catch (e) {
@@ -61,7 +70,35 @@ class ChatService {
   }
 
   // ═══════════════════════════════════════════════
-  // AUTO-POST TICKET SUMMARY (once per ticket)
+  // SEND — system message
+  // ═══════════════════════════════════════════════
+
+  Future<void> sendSystemMessage({
+    required String ticketId,
+    required String message,
+    List<String> imageUrls = const [],
+  }) async {
+    try {
+      await _col.add({
+        'ticket_id': ticketId,
+        'channel': channelId,
+        'sender_email': 'system',
+        'sender_name': 'System',
+        'sender_role': 'system',
+        'message': message,
+        'is_system': true,
+        'image_urls': imageUrls,
+        'attachment_urls': const [],
+        'attachment_names': const [],
+        'sent_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('sendSystemMessage error: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // AUTO-POST TICKET SUMMARY
   // ═══════════════════════════════════════════════
 
   Future<void> ensureTicketSummary(Ticket ticket) async {
@@ -73,9 +110,13 @@ class ChatService {
           .limit(1)
           .get();
 
-      if (existing.docs.isNotEmpty) return;
+      if (existing.docs.isNotEmpty) {
+        await refreshSummaryImages(ticket);
+        return;
+      }
 
       final summary = _buildSummary(ticket);
+      final images = _collectImages(ticket);
 
       await _col.add({
         'ticket_id': ticket.id,
@@ -85,11 +126,44 @@ class ChatService {
         'sender_role': 'system',
         'message': summary,
         'is_system': true,
+        'image_urls': images,
+        'attachment_urls': const [],
+        'attachment_names': const [],
         'sent_at': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       print('ensureTicketSummary error: $e');
     }
+  }
+
+  Future<void> refreshSummaryImages(Ticket ticket) async {
+    try {
+      final snap = await _col
+          .where('ticket_id', isEqualTo: ticket.id)
+          .where('channel', isEqualTo: channelId)
+          .where('is_system', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) return;
+
+      final images = _collectImages(ticket);
+
+      await snap.docs.first.reference.update({
+        'image_urls': images,
+      });
+    } catch (e) {
+      print('refreshSummaryImages error: $e');
+    }
+  }
+
+  List<String> _collectImages(Ticket t) {
+    return <String>[
+      ...t.imageUrls,
+      if (t.completionImageUrl != null &&
+          t.completionImageUrl!.isNotEmpty)
+        t.completionImageUrl!,
+    ];
   }
 
   String _buildSummary(Ticket t) {

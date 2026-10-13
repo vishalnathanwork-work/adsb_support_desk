@@ -270,13 +270,13 @@ class Ticket {
       case 'pending':
         return 'Pending Verification';
       case 'verified':
-        return 'Verified — Pending On-Site';
+        return 'In Review with ADSB Support';
       case 'pending_onsite':
-        return 'Pending On-Site';
+        return 'On-Site Visit Queued';
       case 'in_progress':
-        return 'On-Site In Progress';
+        return 'On-Site Work In Progress';
       case 'resolved':
-        return 'Resolved — Awaiting Confirmation';
+        return 'Resolved — Awaiting Your Confirmation';
       case 'closed':
         return 'Closed';
       case 'reopened':

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../config/theme.dart';
 import '../config/constants.dart';
-import '../services/notification_listener.dart';
 import '../services/session_service.dart';
 import '../utils/role_router.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/brand_background.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -22,25 +21,13 @@ class _SplashScreenState extends State<SplashScreen> {
     _bootstrap();
   }
 
-
   Future<void> _bootstrap() async {
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 800));
 
     final user = await _session.getUser();
-
     if (!mounted) return;
 
     if (user != null) {
-      // Start notifications for the logged-in user
-      await AppNotificationListener().start(
-        userEmail: user.email,
-        userRole: user.role,
-        userSiteIds: user.siteIds,
-      );
-
-      if (!mounted) return;
-
-      // Navigate to the appropriate dashboard
       RoleRouter.goToDashboard(context, user, replace: true);
     } else {
       Navigator.of(context).pushReplacementNamed('/login');
@@ -50,31 +37,45 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const AppLogo(size: 110),
-            const SizedBox(height: 24),
-            const Text(
-              AppConstants.appName,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
+      body: BrandBackground(
+        overlayOpacity: 0.6,
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const AppLogo(size: 120),
+                const SizedBox(height: 24),
+                Text(
+                  AppConstants.appName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Support at your service',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 60),
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    color: Colors.white.withOpacity(0.8),
+                    strokeWidth: 2.5,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 40),
-            const SizedBox(
-              width: 26,
-              height: 26,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2.5,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

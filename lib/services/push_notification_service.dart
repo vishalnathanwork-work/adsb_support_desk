@@ -50,8 +50,7 @@ class PushNotificationService {
       iOS: iosInit,
     );
 
-    // Initialize with named parameter `settings:`
-    await _local.initialize(settings: initSettings);
+    await _local.initialize(initSettings);
 
     // Create Android channel
     const channel = AndroidNotificationChannel(
@@ -73,15 +72,15 @@ class PushNotificationService {
     required String body,
     String? ticketId,
   }) async {
-    // New API: everything is a named parameter
     await _local.show(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: title,
-      body: body,
-      notificationDetails: const NotificationDetails(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
           _channelName,
+          channelDescription: 'Support chat and ticket updates',
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',

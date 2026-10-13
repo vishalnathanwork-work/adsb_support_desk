@@ -220,8 +220,8 @@ class NotificationService {
     await _notifyMany(
       emails: supportEmails,
       ticketId: ticket.id,
-      title: 'TT Advice Received',
-      body: 'TT has replied on ${ticket.id}.',
+      title: 'Advice Received',
+      body: 'Technical Team has replied on ${ticket.id}.',
       type: 'status_update',
     );
   }

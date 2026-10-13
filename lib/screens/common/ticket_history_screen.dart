@@ -4,6 +4,7 @@ import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
 import '../../widgets/status_badge.dart';
 import '../owner/ticket_detail_screen.dart';
 
@@ -110,16 +111,20 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _chip('All', 'all'),
-                      _chip('Open', 'open'),
-                      _chip('Closed', 'closed'),
-                      _chip('Cancelled', 'cancelled'),
-                    ],
-                  ),
+                FilterChipRow(
+                  selectedValue: _filter,
+                  onSelected: (v) {
+                    setState(() {
+                      _filter = v;
+                      _applyFilters();
+                    });
+                  },
+                  options: const [
+                    FilterOption(label: 'All', value: 'all'),
+                    FilterOption(label: 'Open', value: 'open'),
+                    FilterOption(label: 'Closed', value: 'closed'),
+                    FilterOption(label: 'Cancelled', value: 'cancelled'),
+                  ],
                 ),
               ],
             ),
@@ -148,24 +153,6 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
     );
   }
 
-  Widget _chip(String label, String value) {
-    final selected = _filter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        selected: selected,
-        onSelected: (_) {
-          setState(() {
-            _filter = value;
-            _applyFilters();
-          });
-        },
-        selectedColor: AppColors.primary.withOpacity(0.15),
-      ),
-    );
-  }
-
   Widget _ticketCard(Ticket t) {
     return InkWell(
       onTap: () async {
@@ -180,14 +167,14 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
         );
         _load();
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadii.lg),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          boxShadow: AppShadows.soft,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,6 +188,7 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: AppColors.primary,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ),
@@ -213,6 +201,7 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 3),
@@ -221,17 +210,23 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
               style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
+                height: 1.4,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined,
-                    size: 12, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 12,
+                  color: AppColors.textTertiary,
+                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    '${t.siteName} — ${t.laneName}',
+                    '${t.siteName} · ${t.laneName}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -243,29 +238,11 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
                   DateFormatter.relative(t.createdAt),
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textTertiary,
                   ),
                 ),
               ],
             ),
-            if (t.resolvedAt != null) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.check_circle_outline,
-                      size: 12, color: AppColors.success),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Resolved in ${Ticket.formatDuration(t.totalResolutionTime)}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.success,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ],
         ),
       ),

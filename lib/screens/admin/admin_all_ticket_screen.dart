@@ -5,6 +5,7 @@ import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
 import '../../widgets/status_badge.dart';
 import 'admin_ticket_control_screen.dart';
 
@@ -81,19 +82,24 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _chip('All', 'all'),
-                      _chip('Pending', 'pending'),
-                      _chip('Verified', 'verified'),
-                      _chip('In Progress', 'in_progress'),
-                      _chip('Resolved', 'resolved'),
-                      _chip('Closed', 'closed'),
-                      _chip('Cancelled', 'cancelled'),
-                    ],
-                  ),
+                FilterChipRow(
+                  selectedValue: _filterStatus,
+                  onSelected: (v) {
+                    setState(() {
+                      _filterStatus = v;
+                      _applyFilter();
+                    });
+                  },
+                  options: const [
+                    FilterOption(label: 'All', value: 'all'),
+                    FilterOption(label: 'Pending', value: 'pending'),
+                    FilterOption(label: 'Verified', value: 'verified'),
+                    FilterOption(label: 'On-Site', value: 'pending_onsite'),
+                    FilterOption(label: 'In Progress', value: 'in_progress'),
+                    FilterOption(label: 'Resolved', value: 'resolved'),
+                    FilterOption(label: 'Closed', value: 'closed'),
+                    FilterOption(label: 'Cancelled', value: 'cancelled'),
+                  ],
                 ),
               ],
             ),
@@ -218,24 +224,6 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _chip(String label, String value) {
-    final selected = _filterStatus == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        selected: selected,
-        onSelected: (_) {
-          setState(() {
-            _filterStatus = value;
-            _applyFilter();
-          });
-        },
-        selectedColor: AppColors.primary.withOpacity(0.15),
       ),
     );
   }

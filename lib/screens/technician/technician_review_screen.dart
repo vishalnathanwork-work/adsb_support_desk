@@ -28,7 +28,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
   final _service = TicketService();
   Ticket? _ticket;
   bool _isLoading = true;
-  bool _markedReviewed = false;
 
   @override
   void initState() {
@@ -72,47 +71,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     }
   }
 
-  Future<void> _markReviewed() async {
-    if (_ticket == null || _markedReviewed) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Mark review complete?'),
-        content: const Text(
-            'This confirms you have finished advising. The ADSB team will decide next steps.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style:
-            TextButton.styleFrom(foregroundColor: AppColors.success),
-            child: const Text('Mark Complete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    await _service.markTTReviewed(
-      ticketId: widget.ticketId,
-      ttEmail: widget.user.email,
-      ttName: widget.user.name,
-    );
-
-    if (!mounted) return;
-    setState(() => _markedReviewed = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Marked as reviewed. ADSB team has been notified.'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -128,8 +86,6 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     }
 
     final t = _ticket!;
-    final alreadyReviewed =
-        t.ttSolutionProvidedAt != null || _markedReviewed;
 
     return Scaffold(
       appBar: AppBar(
@@ -144,11 +100,9 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            _escalationBanner(t),
-            const SizedBox(height: 16),
-
+            // ─── Ticket Details ───
             _card(
               title: 'Ticket Details',
               children: [
@@ -171,15 +125,18 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                 _row('Contact', '${t.contactName} — ${t.contactPhone}'),
                 _row('Site', t.siteName),
                 _row('Location', t.siteLocation),
-                _row('Parking',
-                    '${t.laneName} (${t.laneDirectionDisplay})'),
+                _row(
+                  'Parking',
+                  '${t.laneName} (${t.laneDirectionDisplay})',
+                ),
                 _row('Product', t.productType),
-                _row('Issue', t.productIssue),
+                if (t.productIssue.isNotEmpty)
+                  _row('Issue', t.productIssue),
                 if (t.description.isNotEmpty)
                   _row('Description', t.description),
                 _row('Reported at', DateFormatter.full(t.createdAt)),
 
-                // ── Reported photos ──
+                // ─── Reported photos ───
                 if (t.imageUrls.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(),
@@ -199,7 +156,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                   ),
                 ],
 
-                // ── Completion evidence ──
+                // ─── Completion evidence ───
                 if (t.completionImageUrl != null &&
                     t.completionImageUrl!.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -221,190 +178,109 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                 ],
               ],
             ),
+
+            // ─── Escalation reason ───
             if (t.escalationReason != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
               _card(
-                title: 'Reason for Review',
+                title: 'Reason for Escalation',
                 children: [
-                  Text(t.escalationReason!,
-                      style: const TextStyle(fontSize: 13, height: 1.5)),
+                  Text(
+                    t.escalationReason!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (t.assignedToName != null) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline,
+                          size: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Escalated by ${t.assignedToName}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ],
 
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.xl),
 
-            const Text('Ticket Chat',
-                style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            const Text(
-              'Chat with the site team and ADSB. The client sees you as ADSB Team.',
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
+            // ─── Chat ───
             SizedBox(
               height: 60,
               child: ElevatedButton.icon(
                 onPressed: _openChat,
                 icon: const Icon(Icons.chat_bubble_outline, size: 22),
-                label: const Text('Open Chat',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Open Chat',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
                   ),
                 ),
               ),
             ),
 
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _callAdsbAgent,
-                icon: const Icon(Icons.phone_in_talk_outlined, size: 20),
-                label: const Text('Call ADSB Agent',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(
-                      color: AppColors.primary, width: 2),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            const SizedBox(height: AppSpacing.md),
+
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                'Provide your advice directly in the chat. '
+                    'The ADSB team will act on it and update the client.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            if (alreadyReviewed) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: AppColors.success.withOpacity(0.3)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.check_circle_outline,
-                        color: AppColors.success, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Review marked complete. ADSB has been notified.',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              SizedBox(
-                height: 48,
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: _markReviewed,
-                  icon: const Icon(Icons.done_all, size: 18),
-                  label: const Text('Mark Review Complete',
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
-                  style: TextButton.styleFrom(
-                      foregroundColor: AppColors.success),
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Center(
-                child: Text(
-                  'Use this after providing your advice',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                      fontStyle: FontStyle.italic),
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _escalationBanner(Ticket t) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF5E35B1), Color(0xFF4527A0)],
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.support_agent,
-                color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Ticket for review',
-                    style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(
-                  t.createdByName,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _card({required String title, required List<Widget> children}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+        boxShadow: AppShadows.soft,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
+          ),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -420,14 +296,22 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
         children: [
           SizedBox(
             width: 100,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),

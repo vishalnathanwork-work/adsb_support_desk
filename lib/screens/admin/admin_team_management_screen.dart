@@ -3,6 +3,7 @@ import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../services/user_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/filter_chip_row.dart';
 import 'widgets/user_form_sheet.dart';
 import 'widgets/user_actions_sheet.dart';
 
@@ -223,37 +224,23 @@ class _AdminTeamManagementScreenState
             ),
           ),
           const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _chip('All', 'all'),
-                _chip('ADSB Support', 'adsb'),
-                _chip('Tech Advisor', 'technician'),
-                _chip('On-Site', 'onsite'),
-                _chip('Admin', 'admin'),
-              ],
-            ),
+          FilterChipRow(
+            selectedValue: _filterRole,
+            onSelected: (v) {
+              setState(() {
+                _filterRole = v;
+                _applyFilters();
+              });
+            },
+            options: const [
+              FilterOption(label: 'All', value: 'all'),
+              FilterOption(label: 'ADSB Support', value: 'adsb'),
+              FilterOption(label: 'Tech Advisor', value: 'technician'),
+              FilterOption(label: 'On-Site', value: 'onsite'),
+              FilterOption(label: 'Admin', value: 'admin'),
+            ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _chip(String label, String value) {
-    final selected = _filterRole == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        selected: selected,
-        onSelected: (_) {
-          setState(() {
-            _filterRole = value;
-            _applyFilters();
-          });
-        },
-        selectedColor: AppColors.primary.withOpacity(0.15),
       ),
     );
   }

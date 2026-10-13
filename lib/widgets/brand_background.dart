@@ -1,42 +1,43 @@
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
 
-/// Wraps any screen with your brand background image.
-/// Falls back to a soft gradient if the image is missing.
+/// Wraps any screen with the brand background image.
+/// Adds a color scrim so text on top stays readable.
 class BrandBackground extends StatelessWidget {
   final Widget child;
-  final bool darken;
+  final double overlayOpacity;
 
   const BrandBackground({
     super.key,
     required this.child,
-    this.darken = false,
+    this.overlayOpacity = 0.55,
   });
 
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Positioned.fill(
-          child: Image.asset(
-            'assets/images/background.png',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryDark],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+        // Background image
+        Image.asset(
+          'assets/images/background.jpeg',
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryDark],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
         ),
-        if (darken)
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.4)),
-          ),
-        Positioned.fill(child: child),
+        // Color overlay
+        Container(
+          color: Colors.black.withOpacity(overlayOpacity),
+        ),
+        // Content
+        child,
       ],
     );
   }
