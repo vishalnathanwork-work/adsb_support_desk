@@ -109,7 +109,14 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           icon: Icons.person_outline,
           page: OwnerProfileTab(
             user: widget.user,
-            onLogout: _logout,
+            onLogout: () async {
+              await SessionService().clear();
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/login', (r) => false);
+              }
+            },
           ),
         ),
       ],

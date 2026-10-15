@@ -167,6 +167,7 @@ class ChatService {
   }
 
   String _buildSummary(Ticket t) {
+    final imageCount = _collectImages(t).length;
     final buffer = StringBuffer();
     buffer.writeln('📋 TICKET SUMMARY');
     buffer.writeln('─────────────────────');
@@ -182,6 +183,9 @@ class ChatService {
       buffer.writeln('Description: ${t.description}');
     }
     buffer.writeln('Status: ${t.statusDisplay}');
+    if (imageCount > 0) {
+      buffer.writeln('Photos attached: $imageCount');
+    }
     return buffer.toString().trim();
   }
 }

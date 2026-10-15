@@ -8,7 +8,6 @@ import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
 import '../onsite/onsite_queue_screen.dart';
-import '../onsite/onsite_job_screen.dart';
 import 'adsb_queue_screen.dart';
 
 class AdsbDashboard extends StatefulWidget {
@@ -56,16 +55,12 @@ class _AdsbDashboardState extends State<AdsbDashboard> {
           page: OwnerProfileTab(
             user: widget.user,
             onLogout: () async {
-              await SessionService().clear();
-              await AuthService().logout();
-              if (context.mounted) {
-                Navigator.of(context)
-                    .pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) => const SizedBox(),
-                    ),
-                        (r) => false);
-              }
+            await SessionService().clear();
+            await AuthService().logout();   // ← now stops listener too
+            if (context.mounted) {
+            Navigator.of(context)
+                .pushNamedAndRemoveUntil('/login', (r) => false);
+            }
             },
           ),
         ),

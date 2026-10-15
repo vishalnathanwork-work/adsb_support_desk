@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
+import 'notification_listener.dart';
 
 class AuthResult {
   final bool success;
@@ -27,7 +28,6 @@ class AuthService {
       final uid = credential.user!.uid;
       final doc = await _firestore.collection('users').doc(uid).get();
 
-      // ─── No profile doc ───
       if (!doc.exists) {
         await _auth.signOut();
         return AuthResult(
@@ -38,7 +38,6 @@ class AuthService {
 
       final data = doc.data()!;
 
-      // ─── Deactivated user ───
       if (data['is_active'] == false) {
         await _auth.signOut();
         return AuthResult(
@@ -48,7 +47,6 @@ class AuthService {
         );
       }
 
-      // ─── Success ───
       return AuthResult(
         success: true,
         user: UserModel.fromJson({
@@ -84,7 +82,13 @@ class AuthService {
     }
   }
 
+  /// Sign out the Firebase Auth user AND stop the notification listener.
+  /// Every dashboard's logout should call this.
   Future<void> logout() async {
+    // Stop the listener first — cancel subscriptions before signOut
+    await AppNotificationListener().stop();
+
+    // Then sign out
     await _auth.signOut();
   }
 }

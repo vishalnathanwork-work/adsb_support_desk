@@ -8,7 +8,6 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/filter_chip_row.dart';
 import '../../widgets/status_badge.dart';
 import 'onsite_job_screen.dart';
-import '../adsb/adsb_chat_screen.dart';
 
 class OnsiteQueueScreen extends StatefulWidget {
   final UserModel user;
@@ -84,7 +83,6 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
 
   Widget _ticketTile(Ticket t) {
     final isUnclaimed = t.status == 'pending_onsite';
-    final isMine = t.assignedTo == widget.user.email;
 
     return InkWell(
       onTap: () async {

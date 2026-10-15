@@ -49,7 +49,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
   // CALL ACTIONS
   // ═══════════════════════════════════════════════
 
-  /// Call the ticket creator (client or operator).
   Future<void> _callClient() async {
     if (_ticket == null) return;
     final phone =
@@ -63,7 +62,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     }
   }
 
-  /// Call the TT advisor team.
   Future<void> _callTTAdvisor() async {
     const ttPhone = '+60 12-345 6792';
     final uri = Uri.parse('tel:$ttPhone');
@@ -76,7 +74,7 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
   }
 
   // ═══════════════════════════════════════════════
-  // OPEN CHAT (unified — client + ADSB + TT + on-site)
+  // OPEN CHAT
   // ═══════════════════════════════════════════════
 
   Future<void> _openChat() async {
@@ -250,11 +248,11 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
             const SizedBox(height: AppSpacing.lg),
 
             // ═══════════════════════════════════════════
-            // CHAT + CALL
+            // CONTACT
             // ═══════════════════════════════════════════
             _sectionHeader('Contact'),
 
-            // Open Chat — always visible while active
+            // Open Chat — full width
             _primaryActionButton(
               icon: Icons.chat_bubble_outline,
               label: 'Open Chat',
@@ -266,7 +264,7 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
 
             const SizedBox(height: AppSpacing.md),
 
-            // Two call options side-by-side
+            // Call Client + Call TT Team side by side
             Row(
               children: [
                 Expanded(
@@ -325,46 +323,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
             ),
 
             const SizedBox(height: AppSpacing.xl),
-
-            // ═══════════════════════════════════════════
-            // STATUS BANNER
-            // ═══════════════════════════════════════════
-
-            if (t.status == 'pending_onsite')
-              _infoBanner(
-                icon: Icons.schedule,
-                color: AppColors.primary,
-                text:
-                'Waiting for an on-site technician to claim this job.',
-              ),
-
-            if (t.status == 'in_progress')
-              _infoBanner(
-                icon: Icons.handyman_outlined,
-                color: AppColors.primary,
-                text: 'On-site work in progress.',
-              ),
-
-            if (t.status == 'resolved')
-              _infoBanner(
-                icon: Icons.check_circle_outline,
-                color: AppColors.success,
-                text: 'Resolved. Waiting for client confirmation.',
-              ),
-
-            if (t.status == 'closed')
-              _infoBanner(
-                icon: Icons.lock_outline,
-                color: AppColors.textSecondary,
-                text: 'This ticket is closed.',
-              ),
-
-            if (t.status == 'cancelled')
-              _infoBanner(
-                icon: Icons.cancel_outlined,
-                color: AppColors.textSecondary,
-                text: 'This ticket was cancelled.',
-              ),
           ],
         ),
       ),
@@ -439,7 +397,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     );
   }
 
-  /// Big primary button — used for "Open Chat".
   Widget _primaryActionButton({
     required IconData icon,
     required String label,
@@ -473,7 +430,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     );
   }
 
-  /// Smaller button with icon + label — used for calls.
   Widget _compactActionButton({
     required IconData icon,
     required String label,
@@ -487,7 +443,8 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: enabled ? color : AppColors.divider,
-          foregroundColor: enabled ? Colors.white : AppColors.textTertiary,
+          foregroundColor:
+          enabled ? Colors.white : AppColors.textTertiary,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           shape: RoundedRectangleBorder(
@@ -512,7 +469,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     );
   }
 
-  /// Two-line outcome button.
   Widget _outcomeButton({
     required IconData icon,
     required String label,
@@ -587,38 +543,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  /// Colored info banner for the current status.
-  Widget _infoBanner({
-    required IconData icon,
-    required Color color,
-    required String text,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppRadii.md),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

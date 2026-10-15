@@ -59,10 +59,15 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     setState(() => _ticket = t);
 
     if (t != null) {
-      await _chatService.ensureTicketSummary(t);
-      if (!mounted) return;
-      setState(() => _summaryReady = true);
+      try {
+        await _chatService.ensureTicketSummary(t);
+      } catch (e) {
+        debugPrint('ensureTicketSummary failed: $e');
+      }
     }
+
+    if (!mounted) return;
+    setState(() => _summaryReady = true);   // ← always unblock
   }
 
   void _scrollToBottom() {
@@ -79,10 +84,12 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
   bool get _chatOpen {
     if (_ticket == null) return false;
-    return _ticket!.status != 'closed' && _ticket!.status != 'cancelled';
+    return _ticket!.status != 'closed' &&
+        _ticket!.status != 'cancelled';
   }
 
-  int get _attachmentCount => _pendingImages.length + _pendingDocs.length;
+  int get _attachmentCount =>
+      _pendingImages.length + _pendingDocs.length;
 
   // ─────────────────────────────────────────
   // ATTACH — picker source sheet
@@ -90,7 +97,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
   void _showAttachSheet() {
     if (_attachmentCount >= AppConfig.maxChatAttachments) {
-      _snack('Maximum ${AppConfig.maxChatAttachments} attachments per message');
+      _snack(
+          'Maximum ${AppConfig.maxChatAttachments} attachments per message');
       return;
     }
 
@@ -181,7 +189,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       _snack('Maximum ${AppConfig.maxChatAttachments} attachments');
       return;
     }
-    final files = await _imageService.pickFromGallery(limit: remaining);
+    final files =
+    await _imageService.pickFromGallery(limit: remaining);
     if (files.isNotEmpty && mounted) {
       setState(() => _pendingImages.addAll(files));
     }
@@ -213,7 +222,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   }
 
   // ─────────────────────────────────────────
-  // SEND
+  // SEND (single method)
   // ─────────────────────────────────────────
 
   Future<void> _send() async {
@@ -224,15 +233,16 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
     setState(() => _isSending = true);
 
-    // Auto-escalate on first ADSB message
+    // ─── Auto-escalate on first ADSB message on a pending ticket ───
     final isAdsb = widget.user.role == 'adsb';
     if (isAdsb && _ticket != null && _ticket!.status == 'pending') {
       await _ticketService.autoEscalateIfNeeded(
         ticketId: widget.ticketId,
-        reason: text.isEmpty ? 'Photo attached' : text,
+        reason: text.isEmpty ? 'Attachment sent' : text,
         adsbEmail: widget.user.email,
         adsbName: widget.user.name,
       );
+
       final fresh =
       await _ticketService.getTicketById(widget.ticketId);
       if (mounted) setState(() => _ticket = fresh);
@@ -285,6 +295,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       _isUploading = false;
     });
   }
+
 
   // ─────────────────────────────────────────
   // BUILD
@@ -360,7 +371,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
                   return const Center(
-                    child: Text('No messages yet. Say something.'),
+                    child:
+                    Text('No messages yet. Say something.'),
                   );
                 }
 
@@ -410,8 +422,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                     IconButton(
                       icon: const Icon(Icons.attach_file),
                       color: AppColors.primary,
-                      onPressed:
-                      _attachmentCount >=
+                      onPressed: _attachmentCount >=
                           AppConfig.maxChatAttachments
                           ? null
                           : _showAttachSheet,
@@ -543,6 +554,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
     );
   }
+
+
 
   Widget _pendingDocThumb({
     required String name,

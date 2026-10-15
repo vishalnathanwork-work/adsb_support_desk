@@ -1,6 +1,6 @@
 class AppConfig {
   /// Set to true when Firebase Storage is enabled (Blaze plan).
-  static const bool useFirebaseStorage = false;
+  static const bool useFirebaseStorage = true;
 
   // Ticket form images
   static const int maxTicketImages = 5;

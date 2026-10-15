@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../config/constants.dart';
 import '../services/session_service.dart';
+import '../services/push_notification_service.dart';
+import '../services/notification_listener.dart';
 import '../utils/role_router.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/brand_background.dart';
@@ -14,6 +16,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final _session = SessionService();
+  final _push = PushNotificationService();
 
   @override
   void initState() {
@@ -22,14 +25,32 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // Give the splash a moment to render
     await Future.delayed(const Duration(milliseconds: 800));
 
     final user = await _session.getUser();
+
     if (!mounted) return;
 
     if (user != null) {
+      // ─── Session restore path ───
+      // Start push + listener BEFORE navigating — otherwise a remembered
+      // user gets no notifications until they log in again.
+      try {
+        await _push.initialize(user.email);
+        await AppNotificationListener().start(
+          userEmail: user.email,
+          userRole: user.role,
+          userSiteIds: user.siteIds,
+        );
+      } catch (e) {
+        print('Session restore: notification setup failed: $e');
+      }
+
+      if (!mounted) return;
       RoleRouter.goToDashboard(context, user, replace: true);
     } else {
+      // No saved session — go to login
       Navigator.of(context).pushReplacementNamed('/login');
     }
   }

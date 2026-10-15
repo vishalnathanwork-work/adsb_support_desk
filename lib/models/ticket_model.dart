@@ -63,7 +63,6 @@ class Ticket {
   final DateTime? escalatedAt;
   final DateTime? cancelledAt;
 
-
   Ticket({
     required this.id,
     required this.createdBy,

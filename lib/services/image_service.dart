@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/app_config.dart';
 
@@ -18,66 +19,66 @@ class PickedFile {
 class ImageService {
   final _picker = ImagePicker();
 
-  // ─────────────────────────────────────────
-  // PICK — images
-  // ─────────────────────────────────────────
-
+  /// Pick an image from camera. Returns null if cancelled.
   Future<File?> pickFromCamera() async {
     try {
-      final picked = await _picker.pickImage(
+      final xFile = await _picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 70,
-        maxWidth: 1280,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
       );
-      return picked == null ? null : File(picked.path);
+      if (xFile == null) return null;
+      return File(xFile.path);
     } catch (e) {
       print('pickFromCamera error: $e');
       return null;
     }
   }
 
+  /// Pick multiple images from gallery up to [limit].
   Future<List<File>> pickFromGallery({int limit = 5}) async {
     try {
-      final picked = await _picker.pickMultiImage(
-        imageQuality: 70,
-        maxWidth: 1280,
+      final xFiles = await _picker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
         limit: limit,
       );
-      return picked.map((x) => File(x.path)).toList();
+      return xFiles.map((x) => File(x.path)).toList();
     } catch (e) {
       print('pickFromGallery error: $e');
       return [];
     }
   }
 
-  // ─────────────────────────────────────────
-  // PICK — any document
-  // ─────────────────────────────────────────
-
-  /// Pick one document (pdf, docx, xlsx, txt, zip, etc.).
+  /// Pick a single document (PDF, Word, Excel, ZIP, etc.).
   Future<PickedFile?> pickDocument() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-        withData: false,
+        type: FileType.custom,
+        allowedExtensions: [
+          'pdf',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'csv',
+          'txt',
+          'zip',
+        ],
       );
       if (result == null || result.files.isEmpty) return null;
+      final path = result.files.first.path;
+      if (path == null) return null;
 
-      final picked = result.files.first;
-      if (picked.path == null) return null;
-
-      final name = picked.name;
-      final lower = name.toLowerCase();
-      final isImage = lower.endsWith('.jpg') ||
-          lower.endsWith('.jpeg') ||
-          lower.endsWith('.png') ||
-          lower.endsWith('.gif') ||
-          lower.endsWith('.webp') ||
-          lower.endsWith('.heic');
+      final file = File(path);
+      final name = result.files.first.name;
+      final isImage = ['jpg', 'jpeg', 'png', 'heic', 'webp']
+          .contains(name.split('.').last.toLowerCase());
 
       return PickedFile(
-        file: File(picked.path!),
+        file: file,
         name: name,
         isImage: isImage,
       );
@@ -87,9 +88,9 @@ class ImageService {
     }
   }
 
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
   // UPLOAD — images
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
 
   Future<String?> uploadImage({
     required File file,
@@ -128,9 +129,9 @@ class ImageService {
     return urls;
   }
 
-  // ─────────────────────────────────────────
-  // UPLOAD — documents / any file
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
+  // UPLOAD — documents
+  // ═══════════════════════════════════════════════
 
   Future<String?> uploadDocument({
     required File file,
@@ -152,18 +153,25 @@ class ImageService {
     }
   }
 
-  /// Real Firebase Storage upload.
+  // ═══════════════════════════════════════════════
+  // REAL FIREBASE UPLOAD
+  // ═══════════════════════════════════════════════
+
   Future<String?> _uploadToFirebase({
     required File file,
     required String folder,
     required String ticketId,
   }) async {
-    // Replace with real Firebase Storage when ready:
-    // import 'package:firebase_storage/firebase_storage.dart';
-    // final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-    // final ref = FirebaseStorage.instance.ref('$folder/$ticketId/$fileName');
-    // final task = await ref.putFile(file);
-    // return await task.ref.getDownloadURL();
-    return null;
+    try {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last.split('\\').last}';
+      final ref = FirebaseStorage.instance
+          .ref('$folder/$ticketId/$fileName');
+      final task = await ref.putFile(file);
+      return await task.ref.getDownloadURL();
+    } catch (e) {
+      print('_uploadToFirebase error: $e');
+      return null;
+    }
   }
 }

@@ -151,7 +151,6 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
       completionImageUrl: result['imageUrl'] as String?,
     );
 
-    // Update chat summary with completion photo
     final imageUrl = result['imageUrl'] as String?;
     if (imageUrl != null && imageUrl.isNotEmpty) {
       final updated = await _service.getTicketById(widget.ticketId);

@@ -235,17 +235,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       );
 
       if (urls.isNotEmpty) {
-        // Save image URLs on the ticket
         await _ticketService.updateTicketFields(
           ticket.id,
           {'image_urls': urls},
         );
 
-        // Refresh ticket + update the chat summary (which already
-        // contains the ticket details) with the new images.
+        // Re-fetch, then force the known URLs into the summary
         final updated = await _ticketService.getTicketById(ticket.id);
         if (updated != null) {
-          await _chatService.refreshSummaryImages(updated);
+          final fixed = updated.copyWith(imageUrls: urls);
+          await _chatService.refreshSummaryImages(fixed);
         }
       }
     }
