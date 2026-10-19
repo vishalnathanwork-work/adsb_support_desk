@@ -75,6 +75,8 @@ class _AdminTicketControlScreenState
       builder: (_) => ReassignSheet(
         ticketId: _ticket!.id,
         adminEmail: widget.admin.email,
+        currentAssigneeEmail: _ticket!.assignedTo,
+        currentAssigneeName: _ticket!.assignedToName,
       ),
     );
 
@@ -165,7 +167,7 @@ class _AdminTicketControlScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(t.id),
-        backgroundColor: AppColors.textPrimary,
+        backgroundColor: AppColors.primaryDark,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -227,6 +229,62 @@ class _AdminTicketControlScreenState
                       ),
                     ],
                   ),
+
+                  // ─── Last admin action (add this) ───
+                  if (t.lastAdminAction != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.textPrimary.withOpacity(0.15),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.history,
+                                size: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'LAST ADMIN ACTION',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${t.lastAdminAction!['action']} — '
+                                '${t.lastAdminAction!['reason'] ?? 'no reason'}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            'by ${t.lastAdminAction!['by'] ?? '—'}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                 ],
               ),
             ),

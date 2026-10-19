@@ -59,9 +59,13 @@ class _UserFormSheetState extends State<UserFormSheet> {
     _companyController = TextEditingController(text: u?['company'] ?? '');
     _selectedRole = u?['role'] ?? widget.allowedRoles.first;
 
-    if (u?['site_ids'] is List) {
+    final siteIdsRaw = u?['site_ids'];
+    if (siteIdsRaw is List) {
       _selectedSiteIds = Set<String>.from(
-          (u!['site_ids'] as List).map((e) => e.toString()));
+        siteIdsRaw.map((e) => e.toString()),
+      );
+    } else if (siteIdsRaw is String && siteIdsRaw.isNotEmpty) {
+      _selectedSiteIds = {siteIdsRaw};
     }
 
     _bootstrap();
@@ -517,13 +521,13 @@ class _UserFormSheetState extends State<UserFormSheet> {
                     color: AppColors.textSecondary,
                   ),
                 ),
-                if (site.lanes.isNotEmpty)
+                if (site.zones.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Wrap(
                       spacing: 4,
                       runSpacing: 4,
-                      children: site.lanes.map((lane) {
+                      children: site.zones.map((zone) {
                         return Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
@@ -535,7 +539,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
                             ),
                           ),
                           child: Text(
-                            lane.name, // ← just "P1", "P2"
+                            zone.name,
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -580,13 +584,15 @@ class _UserFormSheetState extends State<UserFormSheet> {
   String _roleLabel(String role) {
     switch (role) {
       case 'owner':
-        return 'Client';
+        return 'Site Owner';
       case 'operator':
-        return 'Operator';
+        return 'Site Operator';
       case 'adsb':
         return 'ADSB Support Team';
       case 'technician':
         return 'Technical Advisor';
+      case 'onsite':
+        return 'On-Site Technician';
       case 'admin':
         return 'Administrator';
       default:

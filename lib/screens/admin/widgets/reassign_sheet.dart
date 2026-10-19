@@ -5,11 +5,15 @@ import '../../../services/admin_service.dart';
 class ReassignSheet extends StatefulWidget {
   final String ticketId;
   final String adminEmail;
+  final String? currentAssigneeEmail;
+  final String? currentAssigneeName;
 
   const ReassignSheet({
     super.key,
     required this.ticketId,
     required this.adminEmail,
+    this.currentAssigneeEmail,
+    this.currentAssigneeName,
   });
 
   @override
@@ -42,6 +46,16 @@ class _ReassignSheetState extends State<ReassignSheet> {
     if (_selectedUid == null) return;
 
     final user = _users.firstWhere((u) => u['uid'] == _selectedUid);
+
+    if (user['email'] == widget.currentAssigneeEmail) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User is already assigned to this ticket'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
 
     final reason = await _askReason();
     if (reason == null) return;
@@ -124,26 +138,73 @@ class _ReassignSheetState extends State<ReassignSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
+          _handle(),
+          const SizedBox(height: 20),
+          const Text(
+            'Reassign Ticket',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 20),
-          const Text('Reassign Ticket',
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           const Text(
-            'Choose a new owner for this ticket. All parties will be notified.',
+            'Choose a new owner. The current assignee and ticket '
+                'creator will be notified.',
             style: TextStyle(
-                fontSize: 12, color: AppColors.textSecondary),
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
           ),
+
+          // Current assignee
+          if (widget.currentAssigneeEmail != null &&
+              widget.currentAssigneeEmail!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.person_pin,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'CURRENTLY ASSIGNED TO',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          widget.currentAssigneeName ??
+                              widget.currentAssigneeEmail!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 16),
           if (_users.isEmpty)
             const Padding(
@@ -158,20 +219,31 @@ class _ReassignSheetState extends State<ReassignSheet> {
                 itemCount: _users.length,
                 itemBuilder: (context, i) {
                   final u = _users[i];
-                  final selected = _selectedUid == u['uid'];
+                  final isCurrent = u['email'] ==
+                      widget.currentAssigneeEmail;
                   return RadioListTile<String>(
                     value: u['uid'] as String,
                     groupValue: _selectedUid,
-                    onChanged: (v) =>
+                    onChanged: isCurrent
+                        ? null
+                        : (v) =>
                         setState(() => _selectedUid = v),
-                    title: Text(u['name'] as String,
-                        style: const TextStyle(fontSize: 14)),
+                    title: Text(
+                      u['name'] as String,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isCurrent
+                            ? AppColors.textSecondary
+                            : AppColors.textPrimary,
+                      ),
+                    ),
                     subtitle: Text(
-                      '${u['email']} · ${u['role']}',
+                      '${u['email']} · ${u['role']}'
+                          '${isCurrent ? " (current)" : ""}',
                       style: const TextStyle(fontSize: 11),
                     ),
                     activeColor: AppColors.primary,
-                    selected: selected,
+                    selected: _selectedUid == u['uid'],
                   );
                 },
               ),
@@ -200,8 +272,7 @@ class _ReassignSheetState extends State<ReassignSheet> {
                     height: 18,
                     width: 18,
                     child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2),
+                        color: Colors.white, strokeWidth: 2),
                   )
                       : const Text('Reassign'),
                 ),
@@ -212,4 +283,15 @@ class _ReassignSheetState extends State<ReassignSheet> {
       ),
     );
   }
+
+  Widget _handle() => Center(
+    child: Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: AppColors.divider,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    ),
+  );
 }

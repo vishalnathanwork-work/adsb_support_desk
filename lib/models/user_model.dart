@@ -9,6 +9,14 @@ class UserModel {
   final String? clientId;
   final String? clientName;
 
+  // ─── Approval workflow ───
+  /// 'pending' | 'approved' | 'rejected'
+  final String approvalStatus;
+
+  final DateTime? registeredAt;
+  final DateTime? approvedAt;
+  final String? approvedBy;
+
   UserModel({
     required this.email,
     required this.name,
@@ -19,6 +27,10 @@ class UserModel {
     this.siteIds = const [],
     this.clientId,
     this.clientName,
+    this.approvalStatus = 'approved',
+    this.registeredAt,
+    this.approvedAt,
+    this.approvedBy,
   });
 
   Map<String, dynamic> toJson() => {
@@ -31,6 +43,10 @@ class UserModel {
     'site_ids': siteIds,
     'client_id': clientId,
     'client_name': clientName,
+    'approval_status': approvalStatus,
+    'registered_at': registeredAt?.toIso8601String(),
+    'approved_at': approvedAt?.toIso8601String(),
+    'approved_by': approvedBy,
   };
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -43,6 +59,10 @@ class UserModel {
     siteIds: _parseStringList(json['site_ids']),
     clientId: json['client_id'],
     clientName: json['client_name'],
+    approvalStatus: json['approval_status'] ?? 'approved',
+    registeredAt: _parseDate(json['registered_at']),
+    approvedAt: _parseDate(json['approved_at']),
+    approvedBy: json['approved_by'],
   );
 
   static List<String> _parseStringList(dynamic value) {
@@ -52,6 +72,27 @@ class UserModel {
     return [];
   }
 
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    // Firestore Timestamp
+    try {
+      return (value as dynamic).toDate() as DateTime;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ─── Approval helpers ───
+  bool get isPendingApproval =>
+      approvalStatus == 'pending' || !isActive;
+
+  bool get isApproved =>
+      approvalStatus == 'approved' && isActive;
+
+  bool get isRejected => approvalStatus == 'rejected';
+
   // ─── Role helpers ───
   bool get isOwner => role == 'owner';
   bool get isOperator => role == 'operator';
@@ -60,17 +101,13 @@ class UserModel {
   bool get isOnsiteTeam => role == 'onsite';
   bool get isAdmin => role == 'admin';
 
-  /// External = owner or operator.
   bool get isExternal => isOwner || isOperator;
 
-  /// Internal = ADSB, TT, On-Site, Admin.
   bool get isInternal =>
       isAdsbTeam || isTechnician || isOnsiteTeam || isAdmin;
 
-  /// Anyone who can claim/complete on-site jobs.
   bool get canDoOnsite => isOnsiteTeam || isAdsbTeam || isAdmin;
 
-  /// Display name for the role.
   String get roleDisplayName {
     switch (role) {
       case 'owner':
@@ -90,8 +127,6 @@ class UserModel {
     }
   }
 
-  /// Chat bubble label.
-  /// Internal roles (adsb/technician/onsite/admin) all show "ADSB Support".
   String get chatLabel {
     switch (role) {
       case 'owner':

@@ -164,11 +164,11 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
         children: [
           const Divider(height: 1),
           const SizedBox(height: 8),
-          if (site.lanes.isEmpty)
+          if (site.zones.isEmpty)
             const Padding(
               padding: EdgeInsets.all(8),
               child: Text(
-                'No parking labels configured for this site.',
+                'No zones or lanes configured for this site.',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -179,7 +179,7 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${site.lanes.length} parking lot${site.lanes.length == 1 ? '' : 's'}',
+                '${site.totalLanes} lane${site.totalLanes == 1 ? "" : "s"} across ${site.zoneCount} zone${site.zoneCount == 1 ? "" : "s"}',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -188,11 +188,40 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: site.lanes.map(_parkingChip).toList(),
-            ),
+            ...site.zones.map((zone) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      zone.name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (zone.lanes.isEmpty)
+                      const Text(
+                        'No lanes in this zone',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: zone.lanes.map(_parkingChip).toList(),
+                      ),
+                  ],
+                ),
+              );
+            }),
           ],
         ],
       ),

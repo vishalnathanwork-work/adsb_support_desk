@@ -5,15 +5,15 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
-import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
 import 'admin_all_ticket_screen.dart';
 import 'admin_team_management_screen.dart';
 import 'admin_users_screen.dart';
 import 'admin_preset_management_screen.dart';
-import 'data_inspector_screen.dart';
 import 'analytics_screen.dart';
+import 'admin_clients_screen.dart';
+import 'admin_sites_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   final UserModel user;
@@ -71,15 +71,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           label: 'Tickets',
           icon: Icons.confirmation_number_outlined,
           page: AdminAllTicketsScreen(user: widget.user),
-        ),
-        NavTab(
-          label: 'History',
-          icon: Icons.history,
-          page: TicketHistoryScreen(
-            user: widget.user,
-            title: 'All Ticket History',
-            loader: () => TicketService().getAllTickets(),
-          ),
         ),
         NavTab(
           label: 'Teams',
@@ -274,6 +265,32 @@ class _AdminHome extends StatelessWidget {
               ),
               _actionTile(
                 context,
+                Icons.business_outlined,
+                'Clients (Companies)',
+                'Manage client companies and contacts',
+                const Color(0xFF00838F),           // teal
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminClientsScreen(),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
+                Icons.location_city_outlined,
+                'Sites (Locations)',
+                'Manage hospitals, clinics, parking sites',
+                const Color(0xFF6A1B9A),
+                    () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminSitesScreen(),
+                  ),
+                ),
+              ),
+              _actionTile(
+                context,
                 Icons.analytics_outlined,
                 'Analytics & Reporting',
                 'KPIs, trends, insights',
@@ -282,19 +299,6 @@ class _AdminHome extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const AnalyticsScreen(),
-                  ),
-                ),
-              ),
-              _actionTile(
-                context,
-                Icons.storage_outlined,
-                'Data Inspector',
-                'View all locally stored data',
-                const Color(0xFF7C3AED),
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DataInspectorScreen(),
                   ),
                 ),
               ),

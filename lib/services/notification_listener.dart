@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/cupertino.dart';
 import 'push_notification_service.dart';
 
 class AppNotificationListener {
@@ -86,25 +87,34 @@ class AppNotificationListener {
     if (!_isRunning) return;
 
     for (final change in snapshot.docChanges) {
+      debugPrint(
+        '🔔 Notification change: ${change.type} | id=${change.doc.id}',
+      );
+
       if (change.type != DocumentChangeType.added) continue;
 
       final data = change.doc.data();
       if (data == null) continue;
 
       final createdAt = data['created_at'];
+      debugPrint('  created_at = $createdAt (${createdAt.runtimeType})');
+
       if (createdAt is Timestamp) {
         if (_startedAt != null &&
             createdAt.toDate().isBefore(_startedAt!)) {
-          // Skip notifications that predate this login session
+          debugPrint('  ⏭️ Skipped — predates listener start');
           continue;
         }
-      } else {
+      } else if (createdAt != null) {
+        debugPrint('  ⏭️ Skipped — created_at not Timestamp');
         continue;
       }
 
       final title = data['title'] ?? 'Update';
       final body = data['body'] ?? '';
       final ticketId = data['ticket_id'] ?? '';
+
+      debugPrint('  ✅ Showing popup: $title / $body');
 
       _push.showLocal(
         title: title,

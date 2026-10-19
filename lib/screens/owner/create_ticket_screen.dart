@@ -29,10 +29,15 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _chatService = ChatService();
 
   SiteModel? _selectedSite;
-  Lane? _selectedLane;
-  String? _selectedDirection;
   String? _selectedProductType;
   String? _selectedProductIssue;
+
+  /// Selected lanes: keys are lane IDs, values are the lane data maps.
+  /// Example: {'l1': {id, name, type, zone_id, zone_name}, ...}
+  final Map<String, Map<String, String>> _selectedLanes = {};
+
+  /// Which zones are expanded (by zone ID).
+  final Set<String> _expandedZones = {};
 
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
@@ -82,6 +87,58 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       _productTypes = types;
       _productIssuesMap = issuesMap;
       _loading = false;
+    });
+  }
+
+  // ─────────────────────────────────────────
+  // LANE SELECTION
+  // ─────────────────────────────────────────
+
+  void _toggleZoneExpanded(String zoneId) {
+    setState(() {
+      if (_expandedZones.contains(zoneId)) {
+        _expandedZones.remove(zoneId);
+      } else {
+        _expandedZones.add(zoneId);
+      }
+    });
+  }
+
+  void _toggleLane(Zone zone, Lane lane) {
+    setState(() {
+      if (_selectedLanes.containsKey(lane.id)) {
+        _selectedLanes.remove(lane.id);
+      } else {
+        _selectedLanes[lane.id] = {
+          'id': lane.id,
+          'name': lane.name,
+          'type': lane.type,
+          'zone_id': zone.id,
+          'zone_name': zone.name,
+        };
+      }
+    });
+  }
+
+  void _selectAllInZone(Zone zone) {
+    setState(() {
+      for (final lane in zone.lanes) {
+        _selectedLanes[lane.id] = {
+          'id': lane.id,
+          'name': lane.name,
+          'type': lane.type,
+          'zone_id': zone.id,
+          'zone_name': zone.name,
+        };
+      }
+    });
+  }
+
+  void _clearZone(Zone zone) {
+    setState(() {
+      for (final lane in zone.lanes) {
+        _selectedLanes.remove(lane.id);
+      }
     });
   }
 
@@ -172,12 +229,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       _showError('Please select a site location');
       return;
     }
-    if (_selectedLane == null) {
-      _showError('Please select a parking label');
-      return;
-    }
-    if (_selectedDirection == null) {
-      _showError('Please choose what is affected');
+    if (_selectedLanes.isEmpty) {
+      _showError('Please select at least one lane');
       return;
     }
     if (_selectedProductType == null) {
@@ -200,6 +253,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         ? _customIssueController.text.trim()
         : _selectedProductIssue!;
 
+    // Build lanes list in a stable order (grouped by zone, then by lane order)
+    final lanesList = _selectedLanes.values.toList();
+
     // 1. Create the ticket
     final ticket = await _ticketService.createTicket(
       createdBy: widget.user.email,
@@ -208,9 +264,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       siteId: _selectedSite!.id,
       siteName: _selectedSite!.name,
       siteLocation: _selectedSite!.address,
-      laneId: _selectedLane!.id,
-      laneName: _selectedLane!.name,
-      laneDirection: _selectedDirection!,
+      lanes: lanesList,
       productType: _selectedProductType!,
       productIssue: finalIssue,
       contactName: _contactNameController.text.trim(),
@@ -226,7 +280,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
 
-    // 2. Upload images if any
+    // 2. Upload images
     if (_selectedImages.isNotEmpty) {
       final urls = await _imageService.uploadImages(
         files: _selectedImages,
@@ -240,11 +294,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           {'image_urls': urls},
         );
 
-        // Re-fetch, then force the known URLs into the summary
-        final updated = await _ticketService.getTicketById(ticket.id);
+        final updated =
+        await _ticketService.getTicketById(ticket.id);
         if (updated != null) {
-          final fixed = updated.copyWith(imageUrls: urls);
-          await _chatService.refreshSummaryImages(fixed);
+          await _chatService.refreshSummaryImages(
+            updated.copyWith(imageUrls: urls),
+          );
         }
       }
     }
@@ -331,10 +386,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             children: [
               _sectionTitle('Location'),
               _buildSiteDropdown(),
-              const SizedBox(height: 12),
-              _buildLaneDropdown(),
-              const SizedBox(height: 12),
-              _buildDirectionSelector(),
+              const SizedBox(height: 16),
+              _buildLaneSection(),
               const SizedBox(height: 20),
 
               _sectionTitle('Product Details'),
@@ -402,7 +455,594 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   // ═══════════════════════════════════════════════
-  // IMAGE SECTION
+  // SITE DROPDOWN
+  // ═══════════════════════════════════════════════
+
+  Widget _buildSiteDropdown() {
+    if (_sites.isEmpty) {
+      return _emptyMessage(
+        'No sites assigned to your account. Contact admin.',
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedSite?.id,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        hintText: 'Select site',
+        prefixIcon: Icon(
+          Icons.location_on_outlined,
+          color: AppColors.textSecondary,
+        ),
+      ),
+      items: _sites.map((s) {
+        return DropdownMenuItem(
+          value: s.id,
+          child: Text(s.displayName, overflow: TextOverflow.ellipsis),
+        );
+      }).toList(),
+      onChanged: (id) {
+        if (id == null) return;
+        setState(() {
+          _selectedSite = _sites.firstWhere((s) => s.id == id);
+          _selectedLanes.clear();
+          _expandedZones.clear();
+          // Auto-expand the first zone if any
+          if (_selectedSite!.zones.isNotEmpty) {
+            _expandedZones.add(_selectedSite!.zones.first.id);
+          }
+        });
+      },
+      validator: (v) => v == null ? 'Required' : null,
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // LANE SECTION (zone-grouped, expandable, multi-select)
+  // ═══════════════════════════════════════════════
+
+  Widget _buildLaneSection() {
+    if (_selectedSite == null) {
+      return _disabledHint('Select a site first');
+    }
+
+    if (_selectedSite!.zones.isEmpty) {
+      return _emptyMessage(
+        'This site has no zones configured. Contact admin.',
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Which points are affected?',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            if (_selectedLanes.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${_selectedLanes.length} selected',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Tap a zone to expand and select entry/exit points',
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Zones list
+        ..._selectedSite!.zones.map((zone) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildZoneTile(zone),
+          );
+        }),
+
+        // Selected summary
+        if (_selectedLanes.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _buildSelectedSummary(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildZoneTile(Zone zone) {
+    final isExpanded = _expandedZones.contains(zone.id);
+    final selectedInZone = zone.lanes
+        .where((l) => _selectedLanes.containsKey(l.id))
+        .length;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selectedInZone > 0
+              ? AppColors.primary.withOpacity(0.5)
+              : AppColors.divider,
+          width: selectedInZone > 0 ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Zone header (tappable to expand/collapse)
+          InkWell(
+            onTap: () => _toggleZoneExpanded(zone.id),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.local_parking,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          zone.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          zone.lanesSummary,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (selectedInZone > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$selectedInZone',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Expanded content
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(height: 1),
+                  const SizedBox(height: 10),
+
+                  // Quick actions
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => _selectAllInZone(zone),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8),
+                          minimumSize: const Size(0, 30),
+                        ),
+                        child: const Text(
+                          'Select all',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _clearZone(zone),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8),
+                          minimumSize: const Size(0, 30),
+                        ),
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Lane checkboxes
+                  ...zone.lanes.map((lane) {
+                    final selected =
+                    _selectedLanes.containsKey(lane.id);
+                    final isEntry = lane.isEntry;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: InkWell(
+                        onTap: () => _toggleLane(zone, lane),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.primary.withOpacity(0.06)
+                                : AppColors.background,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selected
+                                  ? AppColors.primary
+                                  : AppColors.divider,
+                              width: selected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                selected
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined,
+                                size: 20,
+                                color: selected
+                                    ? AppColors.primary
+                                    : AppColors.textTertiary,
+                              ),
+                              const SizedBox(width: 10),
+                              Icon(
+                                isEntry
+                                    ? Icons.login
+                                    : Icons.logout,
+                                size: 16,
+                                color: isEntry
+                                    ? AppColors.success
+                                    : AppColors.warning,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  lane.name,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: selected
+                                        ? AppColors.primary
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isEntry
+                                      ? AppColors.success
+                                      .withOpacity(0.12)
+                                      : AppColors.warning
+                                      .withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  lane.directionLabel,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: isEntry
+                                        ? AppColors.success
+                                        : AppColors.warning,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedSummary() {
+    // Group by zone
+    final byZone = <String, List<Map<String, String>>>{};
+    for (final lane in _selectedLanes.values) {
+      final zoneName = lane['zone_name'] ?? 'Unassigned';
+      byZone.putIfAbsent(zoneName, () => []).add(lane);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.check_circle_outline,
+                  size: 14, color: AppColors.primary),
+              SizedBox(width: 6),
+              Text(
+                'SELECTED',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...byZone.entries.map((entry) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '📍 ${entry.key}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 5,
+                    children: entry.value.map((lane) {
+                      final isEntry = lane['type'] == 'entry';
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isEntry
+                                ? AppColors.success.withOpacity(0.4)
+                                : AppColors.warning.withOpacity(0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isEntry ? Icons.login : Icons.logout,
+                              size: 10,
+                              color: isEntry
+                                  ? AppColors.success
+                                  : AppColors.warning,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              lane['name'] ?? '',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isEntry
+                                    ? AppColors.success
+                                    : AppColors.warning,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // PRODUCT / ISSUE
+  // ═══════════════════════════════════════════════
+
+  Widget _buildProductTypeDropdown() {
+    if (_productTypes.isEmpty) {
+      return _emptyMessage('No product types loaded. Contact admin.');
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedProductType,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        hintText: 'Select product type',
+        prefixIcon: Icon(
+          Icons.build_outlined,
+          color: AppColors.textSecondary,
+        ),
+      ),
+      items: _productTypes
+          .map((p) => DropdownMenuItem(
+        value: p,
+        child: Text(p, overflow: TextOverflow.ellipsis),
+      ))
+          .toList(),
+      onChanged: (v) {
+        setState(() {
+          _selectedProductType = v;
+          _selectedProductIssue = null;
+          _customIssueController.clear();
+        });
+      },
+      validator: (v) => v == null ? 'Required' : null,
+    );
+  }
+
+  Widget _buildProductIssueDropdown() {
+    if (_selectedProductType == null) {
+      return _disabledHint('Select a product type first');
+    }
+
+    final issues = _productIssuesMap[_selectedProductType] ?? [];
+    if (issues.isEmpty) {
+      return _emptyMessage(
+        'No issues configured for "$_selectedProductType". Contact admin.',
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedProductIssue,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        hintText: 'Select issue',
+        prefixIcon: Icon(
+          Icons.report_problem_outlined,
+          color: AppColors.textSecondary,
+        ),
+      ),
+      items: issues
+          .map((p) => DropdownMenuItem(
+        value: p,
+        child: Text(p, overflow: TextOverflow.ellipsis),
+      ))
+          .toList(),
+      onChanged: (v) {
+        setState(() {
+          _selectedProductIssue = v;
+          if (v != _otherValue) {
+            _customIssueController.clear();
+          }
+        });
+      },
+      validator: (v) => v == null ? 'Required' : null,
+    );
+  }
+
+  Widget _buildCustomIssueField() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.warning.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.edit_note, size: 16, color: AppColors.warning),
+              SizedBox(width: 6),
+              Text(
+                'Describe the issue',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _customIssueController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText:
+              'Type the specific issue you are experiencing...',
+              fillColor: Colors.white,
+            ),
+            validator: (v) {
+              if (_showCustomIssueField &&
+                  (v == null || v.trim().isEmpty)) {
+                return 'Please describe the issue';
+              }
+              return null;
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // IMAGES
   // ═══════════════════════════════════════════════
 
   Widget _buildImageSection() {
@@ -512,323 +1152,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   // ═══════════════════════════════════════════════
-  // SITE / LANE / DIRECTION
+  // HELPERS
   // ═══════════════════════════════════════════════
-
-  Widget _buildSiteDropdown() {
-    if (_sites.isEmpty) {
-      return _emptyMessage(
-        'No sites assigned to your account. Contact admin.',
-      );
-    }
-
-    return DropdownButtonFormField<String>(
-      value: _selectedSite?.id,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select site',
-        prefixIcon: Icon(
-          Icons.location_on_outlined,
-          color: AppColors.textSecondary,
-        ),
-      ),
-      items: _sites.map((s) {
-        return DropdownMenuItem(
-          value: s.id,
-          child: Text(s.displayName, overflow: TextOverflow.ellipsis),
-        );
-      }).toList(),
-      onChanged: (id) {
-        if (id == null) return;
-        setState(() {
-          _selectedSite = _sites.firstWhere((s) => s.id == id);
-          _selectedLane = null;
-          _selectedDirection = null;
-        });
-      },
-      validator: (v) => v == null ? 'Required' : null,
-    );
-  }
-
-  Widget _buildLaneDropdown() {
-    if (_selectedSite == null) {
-      return _disabledHint('Select a site first');
-    }
-
-    final lanes = _selectedSite!.lanes;
-    if (lanes.isEmpty) {
-      return _emptyMessage('This site has no parking labels configured.');
-    }
-
-    return DropdownButtonFormField<String>(
-      value: _selectedLane?.id,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select parking label',
-        prefixIcon: Icon(
-          Icons.local_parking_outlined,
-          color: AppColors.textSecondary,
-        ),
-      ),
-      items: lanes.map((lane) {
-        return DropdownMenuItem(
-          value: lane.id,
-          child: Text(lane.name),
-        );
-      }).toList(),
-      onChanged: (id) {
-        if (id == null) return;
-        setState(() {
-          _selectedLane = lanes.firstWhere((l) => l.id == id);
-          _selectedDirection = null;
-        });
-      },
-      validator: (v) => v == null ? 'Required' : null,
-    );
-  }
-
-  Widget _buildDirectionSelector() {
-    if (_selectedLane == null) {
-      return _disabledHint('Select a parking label first');
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _selectedDirection == null
-              ? AppColors.divider
-              : AppColors.primary.withOpacity(0.4),
-          width: _selectedDirection == null ? 1 : 2,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.compare_arrows,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'What is affected at ${_selectedLane!.name}?',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _directionOption(
-                  label: 'Entry',
-                  value: 'entry',
-                  icon: Icons.login,
-                  color: AppColors.success,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _directionOption(
-                  label: 'Exit',
-                  value: 'exit',
-                  icon: Icons.logout,
-                  color: AppColors.warning,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _directionOption(
-                  label: 'Both',
-                  value: 'both',
-                  icon: Icons.swap_horiz,
-                  color: AppColors.accent,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _directionOption({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    final selected = _selectedDirection == value;
-
-    return InkWell(
-      onTap: () => setState(() => _selectedDirection = value),
-      borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-        decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.12) : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? color : AppColors.divider,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: selected ? color : AppColors.textSecondary,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? color : AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductTypeDropdown() {
-    if (_productTypes.isEmpty) {
-      return _emptyMessage('No product types loaded. Contact admin.');
-    }
-
-    return DropdownButtonFormField<String>(
-      value: _selectedProductType,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select product type',
-        prefixIcon: Icon(
-          Icons.build_outlined,
-          color: AppColors.textSecondary,
-        ),
-      ),
-      items: _productTypes
-          .map((p) => DropdownMenuItem(
-        value: p,
-        child: Text(p, overflow: TextOverflow.ellipsis),
-      ))
-          .toList(),
-      onChanged: (v) {
-        setState(() {
-          _selectedProductType = v;
-          _selectedProductIssue = null;
-          _customIssueController.clear();
-        });
-      },
-      validator: (v) => v == null ? 'Required' : null,
-    );
-  }
-
-  Widget _buildProductIssueDropdown() {
-    if (_selectedProductType == null) {
-      return _disabledHint('Select a product type first');
-    }
-
-    final issues = _productIssuesMap[_selectedProductType] ?? [];
-    if (issues.isEmpty) {
-      return _emptyMessage(
-        'No issues configured for "$_selectedProductType". Contact admin.',
-      );
-    }
-
-    return DropdownButtonFormField<String>(
-      value: _selectedProductIssue,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select issue',
-        prefixIcon: Icon(
-          Icons.report_problem_outlined,
-          color: AppColors.textSecondary,
-        ),
-      ),
-      items: issues
-          .map((p) => DropdownMenuItem(
-        value: p,
-        child: Text(p, overflow: TextOverflow.ellipsis),
-      ))
-          .toList(),
-      onChanged: (v) {
-        setState(() {
-          _selectedProductIssue = v;
-          if (v != _otherValue) {
-            _customIssueController.clear();
-          }
-        });
-      },
-      validator: (v) => v == null ? 'Required' : null,
-    );
-  }
-
-  Widget _buildCustomIssueField() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.warning.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Icon(
-                Icons.edit_note,
-                size: 16,
-                color: AppColors.warning,
-              ),
-              SizedBox(width: 6),
-              Text(
-                'Describe the issue',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.warning,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _customIssueController,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Type the specific issue you are experiencing...',
-              fillColor: Colors.white,
-            ),
-            validator: (v) {
-              if (_showCustomIssueField &&
-                  (v == null || v.trim().isEmpty)) {
-                return 'Please describe the issue';
-              }
-              return null;
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _emptyMessage(String message) {
     return Container(

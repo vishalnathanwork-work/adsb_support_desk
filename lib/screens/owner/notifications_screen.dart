@@ -18,6 +18,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final _service = NotificationService();
+  String _filter = 'all';
 
   Future<void> _open(AppNotification n) async {
     await _service.markAsRead(n.id);
@@ -40,12 +41,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: StreamBuilder<List<AppNotification>>(
         stream: _service.streamMyNotifications(widget.user.email),
         builder: (context, snapshot) {
-          // Loading
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Error
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -75,10 +74,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             );
           }
 
-          final notifications = snapshot.data ?? [];
+          final all = snapshot.data ?? [];
 
-          // Empty
-          if (notifications.isEmpty) {
+          if (all.isEmpty) {
             return const EmptyState(
               icon: Icons.notifications_none,
               title: 'No notifications',
@@ -86,14 +84,114 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             );
           }
 
-          // List
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: notifications.length,
-            itemBuilder: (context, i) =>
-                _notificationTile(notifications[i]),
+          final filtered = _applyFilter(all);
+
+          return Column(
+            children: [
+              // Filter chips
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                color: Colors.white,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _chip('All', 'all', all.length),
+                      const SizedBox(width: 8),
+                      _chip(
+                        'Tickets',
+                        'ticket',
+                        _applyFilter(all, target: 'ticket').length,
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        'Assignments',
+                        'assignment',
+                        _applyFilter(all, target: 'assignment').length,
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        'Account',
+                        'user',
+                        _applyFilter(all, target: 'user').length,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // List
+              Expanded(
+                child: filtered.isEmpty
+                    ? const EmptyState(
+                  icon: Icons.inbox_outlined,
+                  title: 'No notifications in this category',
+                  subtitle: 'Try a different filter',
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) =>
+                      _notificationTile(filtered[i]),
+                ),
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+
+  List<AppNotification> _applyFilter(
+      List<AppNotification> all, {
+        String? target,
+      }) {
+    final f = target ?? _filter;
+    switch (f) {
+      case 'ticket':
+        return all
+            .where((n) =>
+        n.type == 'status_update' ||
+            n.type == 'schedule' ||
+            n.type == 'resolved' ||
+            n.type == 'chat_message')
+            .toList();
+      case 'assignment':
+        return all.where((n) => n.type == 'assignment').toList();
+      case 'user':
+        return all
+            .where((n) =>
+        n.type == 'user_registration' ||
+            n.type == 'user_approved' ||
+            n.type == 'user_rejected')
+            .toList();
+      default:
+        return all;
+    }
+  }
+
+  Widget _chip(String label, String value, int count) {
+    final selected = _filter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _filter = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppRadii.pill),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.divider,
+          ),
+        ),
+        child: Text(
+          count > 0 ? '$label ($count)' : label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
       ),
     );
   }
@@ -122,8 +220,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(
-                Icons.notifications_outlined,
+              child: Icon(
+                _iconForType(n.type),
                 color: AppColors.primary,
                 size: 20,
               ),
@@ -164,5 +262,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
       ),
     );
+  }
+
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'chat_message':
+        return Icons.chat_bubble_outline;
+      case 'assignment':
+        return Icons.person_add_alt;
+      case 'resolved':
+        return Icons.check_circle_outline;
+      case 'schedule':
+        return Icons.event_available_outlined;
+      case 'user_registration':
+        return Icons.person_add_outlined;
+      case 'user_approved':
+        return Icons.verified_user_outlined;
+      case 'user_rejected':
+        return Icons.block_outlined;
+      case 'status_update':
+      default:
+        return Icons.notifications_outlined;
+    }
   }
 }

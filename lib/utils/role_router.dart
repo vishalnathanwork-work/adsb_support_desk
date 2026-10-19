@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
+import '../screens/auth/pending_approval_screen.dart';
 
 class RoleRouter {
   static void goToDashboard(
@@ -7,6 +8,20 @@ class RoleRouter {
       UserModel user, {
         bool replace = false,
       }) {
+    // ─── Pending approval gate ───
+    if (user.isPendingApproval) {
+      final route = MaterialPageRoute(
+        builder: (_) => PendingApprovalScreen(user: user),
+      );
+      if (replace) {
+        Navigator.of(context).pushReplacement(route);
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(route, (r) => false);
+      }
+      return;
+    }
+
+    // ─── Normal role routing ───
     final route = _routeForRole(user.role);
 
     if (replace) {

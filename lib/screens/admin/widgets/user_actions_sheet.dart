@@ -227,13 +227,15 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
   String _roleLabel(String role) {
     switch (role) {
       case 'owner':
-        return 'Client';
+        return 'Site Owner';
       case 'operator':
-        return 'Operator';
+        return 'Site Operator';
       case 'adsb':
         return 'ADSB Support Team';
       case 'technician':
         return 'Technical Advisor';
+      case 'onsite':
+        return 'On-Site Technician';
       case 'admin':
         return 'Administrator';
       default:

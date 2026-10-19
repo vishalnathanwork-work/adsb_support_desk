@@ -24,6 +24,7 @@ class _AdminTeamManagementScreenState
   List<Map<String, dynamic>> _filtered = [];
   bool _isLoading = true;
   String _filterRole = 'all';
+  String _filterStatus = 'active';
   final _searchController = TextEditingController();
 
   @override
@@ -53,75 +54,19 @@ class _AdminTeamManagementScreenState
     final q = _searchController.text.trim().toLowerCase();
     _filtered = _all.where((u) {
       final roleMatch = _filterRole == 'all' || u['role'] == _filterRole;
+
+      final isActive = u['is_active'] ?? true;
+      final statusMatch = _filterStatus == 'active' ? isActive : !isActive;
+
       final name = (u['name'] ?? '').toString().toLowerCase();
       final email = (u['email'] ?? '').toString().toLowerCase();
-      final searchMatch =
-          q.isEmpty || name.contains(q) || email.contains(q);
-      return roleMatch && searchMatch;
+      final searchMatch = q.isEmpty || name.contains(q) || email.contains(q);
+
+      return roleMatch && statusMatch && searchMatch;
     }).toList();
   }
 
-  Future<void> _showAddInfo() async {
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.info_outline, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text('Add Team Member'),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'During development, team members are created manually:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              SizedBox(height: 12),
-              Text('1. Open Firebase Console'),
-              Text('2. Authentication → Add user'),
-              Text('3. Copy the new UID'),
-              Text('4. Firestore → users → Add document'),
-              Text('5. Paste UID as document ID'),
-              Text('6. Set role:'),
-              Padding(
-                padding: EdgeInsets.only(left: 16, top: 4),
-                child: Text('• adsb — ADSB Support'),
-              ),
-              Padding(
-                padding: EdgeInsets.only(left: 16),
-                child: Text('• technician — Technical Advisor'),
-              ),
-              Padding(
-                padding: EdgeInsets.only(left: 16),
-                child: Text('• onsite — On-Site Technician'),
-              ),
-              Padding(
-                padding: EdgeInsets.only(left: 16),
-                child: Text('• admin — Administrator'),
-              ),
-              SizedBox(height: 12),
-              Text(
-                'Once Cloud Functions are enabled, this button will create members directly.',
-                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // ─── Edit ───
   Future<void> _openEditForm(Map<String, dynamic> userData) async {
     final updated = await showModalBottomSheet<bool>(
       context: context,
@@ -135,6 +80,7 @@ class _AdminTeamManagementScreenState
     if (updated == true) _load();
   }
 
+  // ─── Actions ───
   Future<void> _openActions(Map<String, dynamic> userData) async {
     final changed = await showModalBottomSheet<bool>(
       context: context,
@@ -150,6 +96,10 @@ class _AdminTeamManagementScreenState
 
   @override
   Widget build(BuildContext context) {
+    final activeCount = _all.where((u) => u['is_active'] == true).length;
+    final inactiveCount =
+        _all.where((u) => u['is_active'] == false).length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Team Management'),
@@ -157,32 +107,103 @@ class _AdminTeamManagementScreenState
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddInfo,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.group_add),
-        label: const Text('Add Member'),
-      ),
       body: Column(
         children: [
+          // ─── Info banner ───
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             color: AppColors.primary.withOpacity(0.06),
             child: const Row(
               children: [
-                Icon(Icons.info_outline, color: AppColors.primary, size: 18),
+                Icon(Icons.info_outline,
+                    color: AppColors.primary, size: 18),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Internal teams: ADSB Support, TT (Technical Advisor), On-Site Technicians, and Admins.',
+                    'Internal teams: ADSB Support, TT (Technical Advisor), '
+                        'On-Site Technicians, and Admins.',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
               ],
             ),
           ),
-          _buildFilterBar(),
+
+          // ─── Search ───
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(_applyFilters),
+              decoration: const InputDecoration(
+                hintText: 'Search team members...',
+                prefixIcon: Icon(Icons.search),
+                filled: true,
+              ),
+            ),
+          ),
+
+          // ─── Role filter ───
+          FilterChipRow(
+            selectedValue: _filterRole,
+            onSelected: (v) {
+              setState(() {
+                _filterRole = v;
+                _applyFilters();
+              });
+            },
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            options: const [
+              FilterOption(label: 'All', value: 'all'),
+              FilterOption(label: 'ADSB Support', value: 'adsb'),
+              FilterOption(label: 'Tech Advisor', value: 'technician'),
+              FilterOption(label: 'On-Site', value: 'onsite'),
+              FilterOption(label: 'Admin', value: 'admin'),
+            ],
+          ),
+
+          // ─── Status filter ───
+          FilterChipRow(
+            selectedValue: _filterStatus,
+            onSelected: (v) {
+              setState(() {
+                _filterStatus = v;
+                _applyFilters();
+              });
+            },
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            options: [
+              FilterOption(
+                label: 'Active',
+                value: 'active',
+                count: activeCount,
+              ),
+              FilterOption(
+                label: 'Inactive',
+                value: 'inactive',
+                count: inactiveCount,
+              ),
+            ],
+          ),
+
+          // ─── List ───
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -190,13 +211,17 @@ class _AdminTeamManagementScreenState
                 ? const EmptyState(
               icon: Icons.groups_outlined,
               title: 'No team members',
-              subtitle: 'Add your first team member',
+              subtitle: 'Try changing your filters',
             )
                 : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
-                padding:
-                const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  80,
+                ),
                 itemCount: _filtered.length,
                 itemBuilder: (context, i) =>
                     _memberCard(_filtered[i]),
@@ -208,118 +233,110 @@ class _AdminTeamManagementScreenState
     );
   }
 
-  Widget _buildFilterBar() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      color: Colors.white,
-      child: Column(
-        children: [
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(_applyFilters),
-            decoration: const InputDecoration(
-              hintText: 'Search team members...',
-              prefixIcon: Icon(Icons.search),
-              filled: true,
-            ),
-          ),
-          const SizedBox(height: 10),
-          FilterChipRow(
-            selectedValue: _filterRole,
-            onSelected: (v) {
-              setState(() {
-                _filterRole = v;
-                _applyFilters();
-              });
-            },
-            options: const [
-              FilterOption(label: 'All', value: 'all'),
-              FilterOption(label: 'ADSB Support', value: 'adsb'),
-              FilterOption(label: 'Tech Advisor', value: 'technician'),
-              FilterOption(label: 'On-Site', value: 'onsite'),
-              FilterOption(label: 'Admin', value: 'admin'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _memberCard(Map<String, dynamic> m) {
     final isActive = m['is_active'] ?? true;
     final role = m['role'] ?? 'adsb';
     final color = _roleColor(role);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: ListTile(
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor:
-          isActive ? color.withOpacity(0.15) : AppColors.divider,
-          child: Text(
-            (m['name'] ?? '?').toString().substring(0, 1).toUpperCase(),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isActive ? color : AppColors.textSecondary,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openEditForm(m),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: isActive
+                      ? color.withOpacity(0.15)
+                      : AppColors.divider,
+                  child: Text(
+                    (m['name'] ?? '?')
+                        .toString()
+                        .substring(0, 1)
+                        .toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? color : AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              m['name'] ?? '—',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: isActive
+                                    ? AppColors.textPrimary
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          if (!isActive)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.errorLight,
+                                borderRadius:
+                                BorderRadius.circular(AppRadii.pill),
+                              ),
+                              child: const Text(
+                                'INACTIVE',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.error,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        m['email'] ?? '—',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _badge(_roleLabel(role), color),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: AppColors.textSecondary,
+                  ),
+                  onPressed: () => _openActions(m),
+                ),
+              ],
             ),
           ),
         ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                m['name'] ?? '—',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isActive
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ),
-            if (!isActive)
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'INACTIVE',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.error,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 3),
-            Text(m['email'] ?? '—',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
-            const SizedBox(height: 4),
-            _badge(_roleLabel(role), color),
-          ],
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
-          onPressed: () => _openActions(m),
-        ),
-        onTap: () => _openEditForm(m),
       ),
     );
   }
@@ -329,12 +346,15 @@ class _AdminTeamManagementScreenState
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(
         text,
         style: TextStyle(
-            fontSize: 10, color: color, fontWeight: FontWeight.w600),
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

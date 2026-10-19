@@ -8,7 +8,10 @@ import '../../models/user_model.dart';
 import '../../services/chat_service.dart';
 import '../../services/image_service.dart';
 import '../../services/ticket_service.dart';
+import '../../utils/date_formatter.dart';
 import '../../widgets/chat_bubble.dart';
+import '../../widgets/image_gallery.dart';
+import '../../widgets/status_badge.dart';
 
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
@@ -32,7 +35,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   final _scrollController = ScrollController();
 
   Ticket? _ticket;
-  bool _summaryReady = false;
   bool _isSending = false;
   bool _isUploading = false;
 
@@ -43,7 +45,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   @override
   void initState() {
     super.initState();
-    _bootstrap();
+    _loadTicket();
   }
 
   @override
@@ -53,21 +55,10 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
+  Future<void> _loadTicket() async {
     final t = await _ticketService.getTicketById(widget.ticketId);
     if (!mounted) return;
     setState(() => _ticket = t);
-
-    if (t != null) {
-      try {
-        await _chatService.ensureTicketSummary(t);
-      } catch (e) {
-        debugPrint('ensureTicketSummary failed: $e');
-      }
-    }
-
-    if (!mounted) return;
-    setState(() => _summaryReady = true);   // ← always unblock
   }
 
   void _scrollToBottom() {
@@ -84,12 +75,10 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
   bool get _chatOpen {
     if (_ticket == null) return false;
-    return _ticket!.status != 'closed' &&
-        _ticket!.status != 'cancelled';
+    return _ticket!.status != 'closed' && _ticket!.status != 'cancelled';
   }
 
-  int get _attachmentCount =>
-      _pendingImages.length + _pendingDocs.length;
+  int get _attachmentCount => _pendingImages.length + _pendingDocs.length;
 
   // ─────────────────────────────────────────
   // ATTACH — picker source sheet
@@ -183,14 +172,12 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   }
 
   Future<void> _pickGallery() async {
-    final remaining =
-        AppConfig.maxChatAttachments - _attachmentCount;
+    final remaining = AppConfig.maxChatAttachments - _attachmentCount;
     if (remaining <= 0) {
       _snack('Maximum ${AppConfig.maxChatAttachments} attachments');
       return;
     }
-    final files =
-    await _imageService.pickFromGallery(limit: remaining);
+    final files = await _imageService.pickFromGallery(limit: remaining);
     if (files.isNotEmpty && mounted) {
       setState(() => _pendingImages.addAll(files));
     }
@@ -222,7 +209,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   }
 
   // ─────────────────────────────────────────
-  // SEND (single method)
+  // SEND
   // ─────────────────────────────────────────
 
   Future<void> _send() async {
@@ -243,8 +230,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
         adsbName: widget.user.name,
       );
 
-      final fresh =
-      await _ticketService.getTicketById(widget.ticketId);
+      final fresh = await _ticketService.getTicketById(widget.ticketId);
       if (mounted) setState(() => _ticket = fresh);
     }
 
@@ -296,7 +282,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     });
   }
 
-
   // ─────────────────────────────────────────
   // BUILD
   // ─────────────────────────────────────────
@@ -325,6 +310,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
       body: Column(
         children: [
+          // ─── Closed banner ───
           if (!_chatOpen && _ticket != null)
             Container(
               width: double.infinity,
@@ -348,8 +334,15 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                 ],
               ),
             ),
+
+          // ─── Ticket summary card (shown before the chat) ───
+          // To show it only to internal staff, use:
+          // if (_ticket != null && widget.user.isInternal) ...
+          if (_ticket != null) _summaryCard(_ticket!),
+
+          // ─── Messages ───
           Expanded(
-            child: !_summaryReady
+            child: _ticket == null
                 ? const Center(child: CircularProgressIndicator())
                 : StreamBuilder<List<ChatMessage>>(
               stream: _chatService.streamMessages(
@@ -368,11 +361,15 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                   );
                 }
 
-                final messages = snapshot.data ?? [];
+                // Hide old auto-posted "TICKET SUMMARY" system
+                // messages — the summary card replaces them.
+                final messages = (snapshot.data ?? [])
+                    .where((m) => !m.isSystem)
+                    .toList();
+
                 if (messages.isEmpty) {
                   return const Center(
-                    child:
-                    Text('No messages yet. Say something.'),
+                    child: Text('No messages yet. Say something.'),
                   );
                 }
 
@@ -386,8 +383,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, i) {
                     final m = messages[i];
-                    final isMe =
-                        m.senderEmail == widget.user.email;
+                    final isMe = m.senderEmail == widget.user.email;
                     return ChatBubble(message: m, isMe: isMe);
                   },
                 );
@@ -399,8 +395,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
           if (_attachmentCount > 0)
             Container(
               color: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: _buildPendingAttachments(),
             ),
 
@@ -422,8 +418,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                     IconButton(
                       icon: const Icon(Icons.attach_file),
                       color: AppColors.primary,
-                      onPressed: _attachmentCount >=
-                          AppConfig.maxChatAttachments
+                      onPressed:
+                      _attachmentCount >= AppConfig.maxChatAttachments
                           ? null
                           : _showAttachSheet,
                       tooltip: 'Attach file',
@@ -487,6 +483,144 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
     );
   }
+
+  // ═══════════════════════════════════════════════
+  // TICKET SUMMARY CARD
+  // ═══════════════════════════════════════════════
+
+  Widget _summaryCard(Ticket t) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          title: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Ticket Summary',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              StatusBadge(status: t.status),
+            ],
+          ),
+          children: [
+            // Scrolls inside the card so it never pushes the chat off-screen
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sumHeader('Client Details'),
+                    _sumRow('Name',
+                        '${t.createdByName} (${t.createdByRoleLabel})'),
+                    _sumRow(
+                        'Contact', '${t.contactName} · ${t.contactPhone}'),
+                    const SizedBox(height: 8),
+
+                    _sumHeader('Ticket Details'),
+                    _sumRow('Product', t.productType),
+                    _sumRow('Issue', t.productIssue),
+                    _sumRow('Site', '${t.siteName} — ${t.siteLocation}'),
+                    _sumRow('Parking',
+                        '${t.laneName} (${t.laneDirectionDisplay})'),
+                    _sumRow('Reported', DateFormatter.full(t.createdAt)),
+                    if (t.description.isNotEmpty)
+                      _sumRow('Notes', t.description),
+
+                    // Photos uploaded by owner / operator (Firebase Storage)
+                    if (t.imageUrls.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _sumHeader('Reported Photos'),
+                      ImageGallery(
+                        urls: t.imageUrls,
+                        thumbSize: 64,
+                        title: 'Reported Photos',
+                      ),
+                    ],
+
+                    // Photo uploaded by on-site team after completion
+                    if (t.completionImageUrl != null &&
+                        t.completionImageUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _sumHeader('Completion Evidence'),
+                      ImageGallery(
+                        urls: [t.completionImageUrl!],
+                        thumbSize: 64,
+                        title: 'Completion Evidence',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sumHeader(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+
+  Widget _sumRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // PENDING ATTACHMENTS
+  // ═══════════════════════════════════════════════
 
   Widget _buildPendingAttachments() {
     return SingleChildScrollView(
@@ -554,8 +688,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
     );
   }
-
-
 
   Widget _pendingDocThumb({
     required String name,

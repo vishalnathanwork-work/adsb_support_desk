@@ -111,4 +111,75 @@ class SiteService {
       return false;
     }
   }
+
+  // ═══════════════════════════════════════════════
+  // CREATE / UPDATE / DELETE (used by admin)
+  // ═══════════════════════════════════════════════
+
+  /// Create a new site. Returns the new doc ID, or null on failure.
+  Future<String?> createSite(SiteModel site) async {
+    try {
+      final docRef = await _col.add({
+        'client_id': site.clientId,
+        'name': site.name,
+        'address': site.address,
+        'notes': site.notes,
+        'zones': site.zones.map((z) => z.toJson()).toList(),
+        'is_active': site.isActive,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (e) {
+      print('createSite error: $e');
+      return null;
+    }
+  }
+
+  /// Update an existing site.
+  Future<bool> updateSite({
+    required String siteId,
+    required Map<String, dynamic> fields,
+  }) async {
+    try {
+      await _col.doc(siteId).update({
+        ...fields,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('updateSite error: $e');
+      return false;
+    }
+  }
+
+  /// Count tickets associated with a site — used before delete.
+  Future<int> countTicketsForSite(String siteId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tickets')
+          .where('site_id', isEqualTo: siteId)
+          .count()
+          .get();
+      return snap.count ?? 0;
+    } catch (e) {
+      print('countTicketsForSite error: $e');
+      return 0;
+    }
+  }
+
+  /// Count users assigned to a site — used before delete.
+  Future<int> countUsersForSite(String siteId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('site_ids', arrayContains: siteId)
+          .count()
+          .get();
+      return snap.count ?? 0;
+    } catch (e) {
+      print('countUsersForSite error: $e');
+      return 0;
+    }
+  }
 }

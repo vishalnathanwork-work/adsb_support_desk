@@ -37,7 +37,12 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
   Future<void> _save() async {
     if (_selected == null) return;
 
-    final reason = await _askReason();
+    // Warn if jumping from a closed state
+    final isReopening =
+        (widget.currentStatus == 'closed' || widget.currentStatus == 'cancelled') &&
+            _selected != 'cancelled';
+
+    final reason = await _askReason(isReopening: isReopening);
     if (reason == null) return;
 
     setState(() => _saving = true);
@@ -64,19 +69,51 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
     }
   }
 
-  Future<String?> _askReason() async {
+  Future<String?> _askReason({required bool isReopening}) async {
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Reason for override'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Why is the status being changed manually?',
-          ),
+        title: Text(isReopening
+            ? 'Reopen a closed ticket?'
+            : 'Reason for override'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isReopening)
+              Container(
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.warning),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_outlined,
+                        color: AppColors.warning, size: 16),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'You are reopening a closed ticket. '
+                            'The client will be notified.',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Why is the status being changed manually?',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -112,25 +149,22 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
+          _handle(),
+          const SizedBox(height: 20),
+          const Text(
+            'Override Status',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 20),
-          const Text('Override Status',
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text(
-            'Current: ${widget.currentStatus}',
+            'Current: ${_statusLabel(widget.currentStatus)}',
             style: const TextStyle(
-                fontSize: 12, color: AppColors.textSecondary),
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 16),
           ConstrainedBox(
@@ -202,4 +236,38 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
       ),
     );
   }
+
+  String _statusLabel(String s) {
+    switch (s) {
+      case 'pending':
+        return 'Pending';
+      case 'verified':
+        return 'Verified';
+      case 'pending_onsite':
+        return 'On-Site Queued';
+      case 'in_progress':
+        return 'In Progress';
+      case 'resolved':
+        return 'Resolved';
+      case 'closed':
+        return 'Closed';
+      case 'reopened':
+        return 'Reopened';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return s;
+    }
+  }
+
+  Widget _handle() => Center(
+    child: Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: AppColors.divider,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    ),
+  );
 }

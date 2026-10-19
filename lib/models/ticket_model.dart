@@ -11,10 +11,15 @@ class Ticket {
   final String siteName;
   final String siteLocation;
 
-  // Lane (parking label + user-chosen direction)
-  final String laneId;
-  final String laneName;
-  final String laneDirection; // "entry" | "exit" | "both"
+  /// Selected lanes for this ticket.
+  /// Each entry is a Map with keys: id, name, type, zone_id, zone_name.
+  /// Example: [
+  ///   {id: 'l1', name: 'Entry 1', type: 'entry',
+  ///    zone_id: 'z1', zone_name: 'P1'},
+  ///   {id: 'l2', name: 'Exit 2', type: 'exit',
+  ///    zone_id: 'z1', zone_name: 'P1'}
+  /// ]
+  final List<Map<String, String>> lanes;
 
   final String productType;
   final String productIssue;
@@ -23,8 +28,8 @@ class Ticket {
   final String description;
 
   // ─── Images ───
-  final List<String> imageUrls;              // reporter's photos
-  final String? completionImageUrl;          // on-site completion evidence
+  final List<String> imageUrls;
+  final String? completionImageUrl;
 
   final String status;
   final DateTime createdAt;
@@ -63,6 +68,8 @@ class Ticket {
   final DateTime? escalatedAt;
   final DateTime? cancelledAt;
 
+  final Map<String, dynamic>? lastAdminAction;
+
   Ticket({
     required this.id,
     required this.createdBy,
@@ -71,9 +78,7 @@ class Ticket {
     required this.siteId,
     required this.siteName,
     required this.siteLocation,
-    required this.laneId,
-    required this.laneName,
-    required this.laneDirection,
+    required this.lanes,
     required this.productType,
     required this.productIssue,
     required this.contactName,
@@ -113,6 +118,7 @@ class Ticket {
     this.noShowAt,
     this.escalatedAt,
     this.cancelledAt,
+    this.lastAdminAction,
 
   });
 
@@ -129,6 +135,25 @@ class Ticket {
     return [];
   }
 
+  static List<Map<String, String>> _parseLanes(dynamic value) {
+    if (value == null) return [];
+    if (value is! List) return [];
+
+    final result = <Map<String, String>>[];
+    for (final item in value) {
+      if (item is Map) {
+        result.add({
+          'id': item['id']?.toString() ?? '',
+          'name': item['name']?.toString() ?? '',
+          'type': item['type']?.toString() ?? 'entry',
+          'zone_id': item['zone_id']?.toString() ?? '',
+          'zone_name': item['zone_name']?.toString() ?? '',
+        });
+      }
+    }
+    return result;
+  }
+
   factory Ticket.fromJson(Map<String, dynamic> json) => Ticket(
     id: json['ticket_id'] ?? json['id'] ?? '',
     createdBy: json['created_by'] ?? '',
@@ -139,11 +164,7 @@ class Ticket {
     siteName: json['site_name'] ?? '',
     siteLocation: json['site_location'] ?? '',
 
-    laneId: json['lane_id'] ?? '',
-    laneName: json['lane_name'] ?? '',
-    laneDirection: json['lane_direction'] ??
-        json['lane_type'] ?? // fallback for old tickets
-        'entry',
+    lanes: _parseLanes(json['lanes']),
 
     productType: json['product_type'] ?? '',
     productIssue: json['product_issue'] ?? '',
@@ -164,13 +185,11 @@ class Ticket {
     resolutionNotes: json['resolution_notes'],
     resolvedAt: _ts(json['resolved_at']),
 
-    // ─── Escalation / TT ───
     escalationReason: json['escalation_reason'],
     ttAdvisorEmail: json['tt_advisor_email'],
     ttAdvisorName: json['tt_advisor_name'],
     ttReviewStartedAt: _ts(json['tt_review_started_at']),
 
-    // ─── Timestamp Logs ───
     adsbNotifiedAt: _ts(json['adsb_notified_at']),
     callStartedAt: _ts(json['call_started_at']),
     callEndedAt: _ts(json['call_ended_at']),
@@ -190,6 +209,9 @@ class Ticket {
     noShowAt: _ts(json['no_show_at']),
     escalatedAt: _ts(json['escalated_at']),
     cancelledAt: _ts(json['cancelled_at']),
+    lastAdminAction: json['last_admin_action'] is Map
+        ? Map<String, dynamic>.from(json['last_admin_action'] as Map)
+        : null,
 
   );
 
@@ -217,9 +239,7 @@ class Ticket {
         siteId: siteId,
         siteName: siteName,
         siteLocation: siteLocation,
-        laneId: laneId,
-        laneName: laneName,
-        laneDirection: laneDirection,
+        lanes: lanes,
         productType: productType,
         productIssue: productIssue,
         contactName: contactName,
@@ -259,7 +279,8 @@ class Ticket {
         autoClosedAt: autoClosedAt,
         noShowAt: noShowAt,
         escalatedAt: escalatedAt,
-        cancelledAt: cancelledAt ?? this.cancelledAt,
+        cancelledAt: cancelledAt,
+        lastAdminAction: lastAdminAction ?? this.lastAdminAction,
       );
 
   // ─── Display helpers ───
@@ -300,24 +321,51 @@ class Ticket {
   bool get isUnassigned => assignedTo == null && status == 'pending';
   bool get isBeingVerified => assignedTo != null && status == 'pending';
 
-  String get laneDirectionDisplay {
-    switch (laneDirection) {
-      case 'exit':
-        return 'Exit';
-      case 'both':
-        return 'Entry + Exit';
-      case 'entry':
-      default:
-        return 'Entry';
+  /// Primary or summary lane name.
+  String get laneName => lanesSummary;
+
+  /// Map of zoneName -> List of lane maps in that zone.
+  Map<String, List<Map<String, String>>> get lanesByZone {
+    final map = <String, List<Map<String, String>>>{};
+    for (final lane in lanes) {
+      final zoneName = (lane['zone_name']?.isNotEmpty == true)
+          ? lane['zone_name']!
+          : (lane['zone']?.isNotEmpty == true)
+              ? lane['zone']!
+              : 'General';
+      map.putIfAbsent(zoneName, () => []).add(lane);
     }
+    return map;
   }
 
+  /// Display string for lane direction/type ("ENTRY", "EXIT", or "ENTRY / EXIT").
+  String get laneDirectionDisplay {
+    if (lanes.isEmpty) return '—';
+    final types = lanes
+        .map((l) => (l['type'] ?? '').toUpperCase())
+        .where((t) => t.isNotEmpty)
+        .toSet();
+    if (types.isEmpty) return '—';
+    return types.join(' / ');
+  }
+
+  /// Comma-separated with zone: "P1 → Entry 1, P1 → Exit 2"
+  String get lanesSummary {
+    if (lanes.isEmpty) return '—';
+    return lanes.map((l) {
+      final zone = l['zone_name'] ?? '';
+      final name = l['name'] ?? '';
+      return zone.isEmpty ? name : '$zone → $name';
+    }).join(', ');
+  }
+
+  /// Full location display: site + lanes
   String get fullLocationDisplay {
-    if (laneName.isEmpty) return siteName;
-    return '$siteName → $laneName ($laneDirectionDisplay)';
+    if (lanes.isEmpty) return siteName;
+    return '$siteName → $lanesSummary';
   }
 
-  /// Label used in ticket details. Backward compatible with `client`.
+  /// Label used in ticket details.
   String get createdByRoleLabel {
     switch (createdByRole) {
       case 'client':

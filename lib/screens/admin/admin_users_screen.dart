@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
@@ -6,6 +7,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/filter_chip_row.dart';
 import 'widgets/user_form_sheet.dart';
 import 'widgets/user_actions_sheet.dart';
+import 'widgets/approval_sheet.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   final UserModel user;
@@ -19,30 +21,43 @@ class AdminUsersScreen extends StatefulWidget {
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final _service = UserService();
   List<Map<String, dynamic>> _all = [];
+  List<Map<String, dynamic>> _pending = [];
   List<Map<String, dynamic>> _filtered = [];
   bool _isLoading = true;
   String _filterRole = 'all';
   String _filterStatus = 'active';
   final _searchController = TextEditingController();
+  StreamSubscription<List<Map<String, dynamic>>>? _pendingSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _pendingSub = _service.streamPendingUsers().listen((pendingList) {
+      if (!mounted) return;
+      setState(() {
+        _pending = pendingList;
+      });
+    });
   }
 
   @override
   void dispose() {
+    _pendingSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
+
     final list = await _service.getExternalUsers();
+    final pending = await _service.getPendingUsers();
+
     if (!mounted) return;
     setState(() {
       _all = list;
+      _pending = pending;
       _isLoading = false;
       _applyFilters();
     });
@@ -58,62 +73,19 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
       final name = (u['name'] ?? '').toString().toLowerCase();
       final email = (u['email'] ?? '').toString().toLowerCase();
-      final company = (u['company'] ?? '').toString().toLowerCase();
-      final searchMatch = q.isEmpty ||
-          name.contains(q) ||
-          email.contains(q) ||
-          company.contains(q);
+      final searchMatch =
+          q.isEmpty || name.contains(q) || email.contains(q);
 
       return roleMatch && statusMatch && searchMatch;
     }).toList();
   }
 
-  Future<void> _showAddInfo() async {
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.info_outline, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text('Create User'),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'During development, users are created manually:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              SizedBox(height: 12),
-              Text('1. Open Firebase Console'),
-              Text('2. Authentication → Add user'),
-              Text('3. Copy the new UID'),
-              Text('4. Firestore → users → Add document'),
-              Text('5. Paste UID as document ID'),
-              Text('6. Add fields (email, name, role, etc.)'),
-              SizedBox(height: 12),
-              Text(
-                'Once Cloud Functions are enabled, this button will create users directly.',
-                style: TextStyle(
-                    fontSize: 12, fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
+  // ─── Safe parse: handles List, String, or null ───
+  List<String> _siteIdsOf(Map<String, dynamic> u) {
+    return _parseSiteIds(u['site_ids']);
   }
 
+  // ─── Edit ───
   Future<void> _openEditForm(Map<String, dynamic> userData) async {
     final updated = await showModalBottomSheet<bool>(
       context: context,
@@ -127,6 +99,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (updated == true) _load();
   }
 
+  // ─── Actions ───
   Future<void> _openActions(Map<String, dynamic> userData) async {
     final changed = await showModalBottomSheet<bool>(
       context: context,
@@ -140,6 +113,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (changed == true) _load();
   }
 
+  // ─── Approve pending ───
+  Future<void> _openApproval(Map<String, dynamic> userData) async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ApprovalSheet(
+        userData: userData,
+        adminEmail: widget.user.email,
+      ),
+    );
+    if (result != null) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeCount = _all.where((u) => u['is_active'] == true).length;
@@ -150,17 +137,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       appBar: AppBar(
         title: const Text('User Management'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddInfo,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add User'),
       ),
       body: Column(
         children: [
@@ -177,7 +155,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               controller: _searchController,
               onChanged: (_) => setState(_applyFilters),
               decoration: const InputDecoration(
-                hintText: 'Search by name, email, or company...',
+                hintText: 'Search by name or email...',
                 prefixIcon: Icon(Icons.search),
                 filled: true,
               ),
@@ -235,6 +213,64 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             ],
           ),
 
+          // ─── Pending banner ───
+          if (_pending.isNotEmpty)
+            InkWell(
+              onTap: () => _showPendingList(),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: 12,
+                ),
+                color: AppColors.warning.withOpacity(0.12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: AppColors.warning,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.pending_actions,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_pending.length} pending '
+                                'registration${_pending.length == 1 ? "" : "s"}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const Text(
+                            'Tap to review and approve',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // ─── List ───
           Expanded(
             child: _isLoading
@@ -243,8 +279,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 ? const EmptyState(
               icon: Icons.people_outline,
               title: 'No users found',
-              subtitle: 'Try adjusting your filters',
-            )
+              subtitle: 'Users appear here after self-registration + approval',            )
                 : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
@@ -265,10 +300,25 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
+  // ─── Pending list popup ───
+  Future<void> _showPendingList() async {
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PendingListSheet(pending: _pending),
+    );
+
+    if (picked != null) {
+      await _openApproval(picked);
+    }
+  }
+
   Widget _userCard(Map<String, dynamic> u) {
     final isActive = u['is_active'] ?? true;
     final role = u['role'] ?? 'owner';
     final color = role == 'operator' ? AppColors.accent : AppColors.primary;
+    final siteCount = _siteIdsOf(u).length;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -286,7 +336,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             ),
             child: Row(
               children: [
-                // ─── Avatar ───
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: isActive
@@ -300,15 +349,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: isActive
-                          ? color
-                          : AppColors.textTertiary,
+                      color: isActive ? color : AppColors.textTertiary,
                     ),
                   ),
                 ),
                 const SizedBox(width: 14),
-
-                // ─── Info ───
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,9 +380,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: AppColors.errorLight,
-                                borderRadius: BorderRadius.circular(
-                                  AppRadii.pill,
-                                ),
+                                borderRadius:
+                                BorderRadius.circular(AppRadii.pill),
                               ),
                               child: const Text(
                                 'INACTIVE',
@@ -363,21 +407,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       Row(
                         children: [
                           _badge(
-                            role == 'owner' ? 'Site Owner' : 'Site Operator',
+                            role == 'owner'
+                                ? 'Site Owner'
+                                : 'Site Operator',
                             color,
                           ),
-                          if ((u['company'] ?? '')
-                              .toString()
-                              .isNotEmpty) ...[
+                          if (siteCount > 0) ...[
                             const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                u['company'],
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textTertiary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                            Text(
+                              '· $siteCount site(s)',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textTertiary,
                               ),
                             ),
                           ],
@@ -386,8 +427,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     ],
                   ),
                 ),
-
-                // ─── Actions ───
                 IconButton(
                   icon: const Icon(
                     Icons.more_vert,
@@ -420,4 +459,115 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       ),
     );
   }
+}
+
+// ═══════════════════════════════════════════════
+// PENDING LIST SHEET
+// ═══════════════════════════════════════════════
+
+class _PendingListSheet extends StatelessWidget {
+  final List<Map<String, dynamic>> pending;
+
+  const _PendingListSheet({required this.pending});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Pending Approvals (${pending.length})',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap a user to review and assign client + sites',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 400),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: pending.length,
+              itemBuilder: (context, i) {
+                final p = pending[i];
+                final role = p['role'] ?? 'owner';
+                final siteCount = _parseSiteIds(p['site_ids']).length;
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor:
+                    AppColors.warning.withOpacity(0.15),
+                    child: const Icon(
+                      Icons.pending_actions,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                  title: Text(
+                    p['name'] ?? '—',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${p['email'] ?? ''}\n'
+                        '${role == 'owner' ? 'Site Owner' : 'Site Operator'} '
+                        '· $siteCount site(s)',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  isThreeLine: true,
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(context, p),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
+// SAFE HELPERS — top-level
+// ═══════════════════════════════════════════════
+
+/// Safe parse: handles List, String, or null.
+List<String> _parseSiteIds(dynamic value) {
+  if (value == null) return [];
+  if (value is List) return value.map((e) => e.toString()).toList();
+  if (value is String) return value.isEmpty ? [] : [value];
+  return [];
 }
