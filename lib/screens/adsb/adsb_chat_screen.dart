@@ -12,6 +12,7 @@ import '../../utils/date_formatter.dart';
 import '../../widgets/chat_bubble.dart';
 import '../../widgets/image_gallery.dart';
 import '../../widgets/status_badge.dart';
+import '../../services/chat_presence_service.dart';
 
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
@@ -33,32 +34,64 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   final _imageService = ImageService();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _presenceService = ChatPresenceService();
 
   Ticket? _ticket;
   bool _isSending = false;
   bool _isUploading = false;
 
-  // Staged attachments for the next message
   final List<File> _pendingImages = [];
   final List<PickedFile> _pendingDocs = [];
 
   @override
   void initState() {
     super.initState();
-    _loadTicket();
+    _bootstrap();
+    // Mark user as viewing this chat
+    _presenceService.enterChat(widget.ticketId);
   }
 
   @override
   void dispose() {
+    // Clear viewing state when leaving the chat
+    _presenceService.exitChat();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadTicket() async {
+  Future<void> _bootstrap() async {
     final t = await _ticketService.getTicketById(widget.ticketId);
     if (!mounted) return;
+
+    // ─── TT access gate ───
+    if (t != null && widget.user.isTechnician) {
+      const ttProducts = ['Barrier', 'Payment Terminal', 'Intercom'];
+      if (!ttProducts.contains(t.productType)) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your role only handles Barrier, Payment Terminal, '
+                  'and Intercom products.',
+            ),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _ticket = t);
+
+    // Post ticket summary (non-blocking)
+    if (t != null) {
+      try {
+        await _chatService.ensureTicketSummary(t);
+      } catch (e) {
+        debugPrint('ensureTicketSummary failed: $e');
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -78,10 +111,11 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
     return _ticket!.status != 'closed' && _ticket!.status != 'cancelled';
   }
 
-  int get _attachmentCount => _pendingImages.length + _pendingDocs.length;
+  int get _attachmentCount =>
+      _pendingImages.length + _pendingDocs.length;
 
   // ─────────────────────────────────────────
-  // ATTACH — picker source sheet
+  // ATTACH
   // ─────────────────────────────────────────
 
   void _showAttachSheet() {
@@ -220,7 +254,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
     setState(() => _isSending = true);
 
-    // ─── Auto-escalate on first ADSB message on a pending ticket ───
+    // Auto-escalate on first ADSB message on a pending ticket
     final isAdsb = widget.user.role == 'adsb';
     if (isAdsb && _ticket != null && _ticket!.status == 'pending') {
       await _ticketService.autoEscalateIfNeeded(
@@ -299,7 +333,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
             ),
             if (_ticket != null)
               Text(
-                '${_ticket!.siteName} · ${_ticket!.laneName}',
+                '${_ticket!.siteName} · ${_ticket!.laneName} (${_ticket!.laneDirectionDisplay})',
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.normal,
@@ -310,7 +344,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
       ),
       body: Column(
         children: [
-          // ─── Closed banner ───
           if (!_chatOpen && _ticket != null)
             Container(
               width: double.infinity,
@@ -335,12 +368,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               ),
             ),
 
-          // ─── Ticket summary card (shown before the chat) ───
-          // To show it only to internal staff, use:
-          // if (_ticket != null && widget.user.isInternal) ...
           if (_ticket != null) _summaryCard(_ticket!),
 
-          // ─── Messages ───
           Expanded(
             child: _ticket == null
                 ? const Center(child: CircularProgressIndicator())
@@ -361,8 +390,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                   );
                 }
 
-                // Hide old auto-posted "TICKET SUMMARY" system
-                // messages — the summary card replaces them.
                 final messages = (snapshot.data ?? [])
                     .where((m) => !m.isSystem)
                     .toList();
@@ -391,7 +418,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
             ),
           ),
 
-          // ─── Pending attachments preview ───
           if (_attachmentCount > 0)
             Container(
               color: Colors.white,
@@ -400,7 +426,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
               child: _buildPendingAttachments(),
             ),
 
-          // ─── Input row ───
           if (_chatOpen)
             Container(
               padding: const EdgeInsets.all(8),
@@ -418,8 +443,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                     IconButton(
                       icon: const Icon(Icons.attach_file),
                       color: AppColors.primary,
-                      onPressed:
-                      _attachmentCount >= AppConfig.maxChatAttachments
+                      onPressed: _attachmentCount >=
+                          AppConfig.maxChatAttachments
                           ? null
                           : _showAttachSheet,
                       tooltip: 'Attach file',
@@ -517,7 +542,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
             ],
           ),
           children: [
-            // Scrolls inside the card so it never pushes the chat off-screen
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 260),
               child: SingleChildScrollView(
@@ -527,21 +551,18 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                     _sumHeader('Client Details'),
                     _sumRow('Name',
                         '${t.createdByName} (${t.createdByRoleLabel})'),
-                    _sumRow(
-                        'Contact', '${t.contactName} · ${t.contactPhone}'),
+                    _sumRow('Contact',
+                        '${t.contactName} · ${t.contactPhone}'),
                     const SizedBox(height: 8),
 
                     _sumHeader('Ticket Details'),
                     _sumRow('Product', t.productType),
                     _sumRow('Issue', t.productIssue),
                     _sumRow('Site', '${t.siteName} — ${t.siteLocation}'),
-                    _sumRow('Parking',
-                        '${t.laneName} (${t.laneDirectionDisplay})'),
-                    _sumRow('Reported', DateFormatter.full(t.createdAt)),
+                    _sumRow('Parking', '${t.laneName} (${t.laneDirectionDisplay})'),                    _sumRow('Reported', DateFormatter.full(t.createdAt)),
                     if (t.description.isNotEmpty)
                       _sumRow('Notes', t.description),
 
-                    // Photos uploaded by owner / operator (Firebase Storage)
                     if (t.imageUrls.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _sumHeader('Reported Photos'),
@@ -552,7 +573,6 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
                       ),
                     ],
 
-                    // Photo uploaded by on-site team after completion
                     if (t.completionImageUrl != null &&
                         t.completionImageUrl!.isNotEmpty) ...[
                       const SizedBox(height: 8),

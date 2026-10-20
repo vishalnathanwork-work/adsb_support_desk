@@ -30,21 +30,23 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
 
   bool get _isSelf => _email == widget.currentAdminEmail;
 
+  // ═══════════════════════════════════════════════
+  // TOGGLE ACTIVE
+  // ═══════════════════════════════════════════════
+
   Future<void> _toggleActive() async {
     if (_isSelf) {
       _snack('You cannot deactivate your own account', AppColors.error);
       return;
     }
 
-    // Confirm deactivation
     if (_isActive) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Deactivate user?'),
           content: Text(
-            '$_name will no longer be able to log in. '
-                'Their data and history will be preserved.',
+            '$_name will no longer be able to log in.',
           ),
           actions: [
             TextButton(
@@ -84,11 +86,96 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
     }
   }
 
+  // ═══════════════════════════════════════════════
+  // DELETE USER (hard delete)
+  // ═══════════════════════════════════════════════
+
+  Future<void> _deleteUser() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete user?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$_name will be removed from the system and can no longer '
+                  'log in.',
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warning),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 16, color: AppColors.warning),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Their Firebase Auth account must be deleted '
+                          'separately in Firebase Console → Authentication.',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This cannot be undone.',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.error,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isWorking = true);
+    final success = await _service.deleteUser(_uid);
+    if (!mounted) return;
+    setState(() => _isWorking = false);
+
+    if (success) {
+      _snack('User deleted', AppColors.warning);
+      Navigator.pop(context, true);
+    } else {
+      _snack('Delete failed', AppColors.error);
+    }
+  }
+
   void _snack(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: color),
     );
   }
+
+  // ═══════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +290,31 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
 
           const Divider(height: 1),
 
-          // ─── Info tile (read-only stats) ───
+          // ─── Delete user ───
+          ListTile(
+            enabled: !_isWorking && !_isSelf,
+            leading: Icon(
+              Icons.delete_forever,
+              color: _isSelf ? AppColors.textSecondary : AppColors.error,
+            ),
+            title: Text(
+              'Delete Permanently',
+              style: TextStyle(
+                color: _isSelf ? AppColors.textSecondary : AppColors.error,
+              ),
+            ),
+            subtitle: Text(
+              _isSelf
+                  ? 'You cannot delete your own account'
+                  : 'Removes from Firestore (Auth cleanup manual)',
+              style: const TextStyle(fontSize: 11),
+            ),
+            onTap: _isWorking || _isSelf ? null : _deleteUser,
+          ),
+
+          const Divider(height: 1),
+
+          // ─── Info tile ───
           ListTile(
             leading: const Icon(Icons.info_outline,
                 color: AppColors.textSecondary),

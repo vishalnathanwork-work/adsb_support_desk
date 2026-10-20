@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'notification_service.dart';
 
 class UserService {
@@ -8,20 +9,15 @@ class UserService {
   // READ
   // ═══════════════════════════════════════════════
 
-  /// Returns all users as raw maps (includes uid).
-  /// Each map has: uid, email, name, role, phone, company,
-  /// is_active, site_ids, created_at, updated_at
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     try {
       final snap = await _col.get();
       final list = snap.docs
           .map((d) => <String, dynamic>{'uid': d.id, ...d.data()})
           .toList();
-
-      // Sort by name
-      list.sort((a, b) =>
-          (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
-
+      list.sort((a, b) => (a['name'] ?? '')
+          .toString()
+          .compareTo((b['name'] ?? '').toString()));
       return list;
     } catch (e) {
       print('getAllUsers error: $e');
@@ -29,7 +25,6 @@ class UserService {
     }
   }
 
-  /// External users = clients + operators
   Future<List<Map<String, dynamic>>> getExternalUsers() async {
     final all = await getAllUsers();
     return all.where((u) {
@@ -38,7 +33,6 @@ class UserService {
     }).toList();
   }
 
-  /// Internal team = adsb + technician + onsite + admin
   Future<List<Map<String, dynamic>>> getInternalTeam() async {
     final all = await getAllUsers();
     return all.where((u) {
@@ -50,12 +44,32 @@ class UserService {
     }).toList();
   }
 
+  Future<Map<String, dynamic>?> getUserByUid(String uid) async {
+    try {
+      final doc = await _col.doc(uid).get();
+      if (!doc.exists) return null;
+      return <String, dynamic>{'uid': doc.id, ...doc.data()!};
+    } catch (e) {
+      print('getUserByUid error: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getFreshUserByUid(String uid) async {
+    try {
+      final doc = await _col.doc(uid).get();
+      if (!doc.exists) return null;
+      return <String, dynamic>{'uid': doc.id, ...doc.data()!};
+    } catch (e) {
+      print('getFreshUserByUid error: $e');
+      return null;
+    }
+  }
+
   // ═══════════════════════════════════════════════
-  // REGISTRATION / APPROVAL (NEW)
+  // REGISTRATION / APPROVAL
   // ═══════════════════════════════════════════════
 
-  /// Returns all users with approval_status == 'pending'.
-  /// Used by admin approval queue.
   Future<List<Map<String, dynamic>>> getPendingUsers() async {
     try {
       final snap = await _col
@@ -67,7 +81,6 @@ class UserService {
       list.sort((a, b) {
         final aTime = a['registered_at'];
         final bTime = b['registered_at'];
-        // Newest first
         if (aTime == null && bTime == null) return 0;
         if (aTime == null) return 1;
         if (bTime == null) return -1;
@@ -86,34 +99,6 @@ class UserService {
     }
   }
 
-  /// Real-time stream of users with approval_status == 'pending'.
-  Stream<List<Map<String, dynamic>>> streamPendingUsers() {
-    return _col
-        .where('approval_status', isEqualTo: 'pending')
-        .snapshots()
-        .map((snap) {
-      final list = snap.docs
-          .map((d) => <String, dynamic>{'uid': d.id, ...d.data()})
-          .toList();
-      list.sort((a, b) {
-        final aTime = a['registered_at'];
-        final bTime = b['registered_at'];
-        if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        try {
-          return (bTime as dynamic)
-              .toDate()
-              .compareTo((aTime as dynamic).toDate());
-        } catch (_) {
-          return 0;
-        }
-      });
-      return list;
-    });
-  }
-
-  /// Count of pending users — used for the badge on admin screens.
   Future<int> getPendingUsersCount() async {
     try {
       final snap = await _col
@@ -135,7 +120,6 @@ class UserService {
     required String adminEmail,
   }) async {
     try {
-      // Get user info first (for the notification)
       final userDoc = await _col.doc(uid).get();
       final userEmail = userDoc.data()?['email'] as String? ?? '';
       final userName = userDoc.data()?['name'] as String? ?? 'User';
@@ -151,7 +135,6 @@ class UserService {
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // ✅ Notify the user
       try {
         await NotificationService().onUserApproved(
           userEmail: userEmail,
@@ -170,12 +153,10 @@ class UserService {
 
   Future<bool> rejectUser(String uid) async {
     try {
-      // Get user info BEFORE deleting
       final userDoc = await _col.doc(uid).get();
       final userEmail = userDoc.data()?['email'] as String? ?? '';
       final userName = userDoc.data()?['name'] as String? ?? 'User';
 
-      // ✅ Notify BEFORE deleting (user can still see it if they log in)
       try {
         await NotificationService().onUserRejected(
           userEmail: userEmail,
@@ -192,31 +173,51 @@ class UserService {
       return false;
     }
   }
-  /// Re-read a single user doc — used by PendingApprovalScreen's refresh button.
-  Future<Map<String, dynamic>?> getFreshUserByUid(String uid) async {
-    try {
-      final doc = await _col.doc(uid).get();
-      if (!doc.exists) return null;
-      return <String, dynamic>{'uid': doc.id, ...doc.data()!};
-    } catch (e) {
-      print('getFreshUserByUid error: $e');
-      return null;
-    }
-  }
 
-  Future<Map<String, dynamic>?> getUserByUid(String uid) async {
+  // ═══════════════════════════════════════════════
+  // ADMIN — CREATE USER (Cloud Function)
+  // ═══════════════════════════════════════════════
+
+  /// Creates a user in Firebase Auth + Firestore via Cloud Function.
+  /// Returns the new UID or null on failure.
+  Future<({String? uid, String? error})> adminCreateUser({
+    required String email,
+    required String password,
+    required String name,
+    required String role,
+    String? phone,
+    String? clientId,
+    String? clientName,
+    List<String> siteIds = const [],
+  }) async {
     try {
-      final doc = await _col.doc(uid).get();
-      if (!doc.exists) return null;
-      return <String, dynamic>{'uid': doc.id, ...doc.data()!};
+      final callable =
+      FirebaseFunctions.instance.httpsCallable('adminCreateUser');
+
+      final result = await callable.call({
+        'email': email,
+        'password': password,
+        'name': name,
+        'role': role,
+        'phone': phone,
+        'clientId': clientId,
+        'clientName': clientName,
+        'siteIds': siteIds,
+      });
+
+      final uid = result.data['uid'] as String?;
+      return (uid: uid, error: null);
+    } on FirebaseFunctionsException catch (e) {
+      print('adminCreateUser error: ${e.code} - ${e.message}');
+      return (uid: null, error: e.message ?? 'Failed to create user');
     } catch (e) {
-      print('getUserByUid error: $e');
-      return null;
+      print('adminCreateUser error: $e');
+      return (uid: null, error: 'Unexpected error: $e');
     }
   }
 
   // ═══════════════════════════════════════════════
-  // UPDATE (Option B — Firestore only, no Auth changes)
+  // UPDATE
   // ═══════════════════════════════════════════════
 
   Future<bool> updateUser({
@@ -235,10 +236,6 @@ class UserService {
     }
   }
 
-  /// Marks user inactive in Firestore.
-  /// NOTE: In Option B, this does NOT disable their Auth account.
-  /// They can still technically sign in, but AuthService will
-  /// reject them at login because is_active == false.
   Future<bool> deactivateUser(String uid) async {
     return updateUser(uid: uid, fields: {'is_active': false});
   }
@@ -256,7 +253,73 @@ class UserService {
   }
 
   // ═══════════════════════════════════════════════
-  // STATS (used in admin screens)
+  // DELETE (Firestore only — Cloud Function handles Auth)
+  // ═══════════════════════════════════════════════
+
+  Future<bool> deleteUser(String uid) async {
+    try {
+      // Get email for FCM token cleanup
+      final userDoc = await _col.doc(uid).get();
+      final email = userDoc.data()?['email'] as String? ?? '';
+
+      // Delete FCM token
+      if (email.isNotEmpty) {
+        final safeKey = email.replaceAll('.', '_');
+        try {
+          await FirebaseFirestore.instance
+              .collection('fcm_tokens')
+              .doc(safeKey)
+              .delete();
+        } catch (e) {
+          print('FCM token delete error: $e');
+        }
+      }
+
+      // Delete Firestore doc
+      // → Triggers cleanupAuthOnUserDelete Cloud Function
+      // → Which deletes Firebase Auth account
+      await _col.doc(uid).delete();
+
+      print('✅ User deleted from Firestore (Auth cleanup in progress)');
+      return true;
+    } catch (e) {
+      print('deleteUser error: $e');
+      return false;
+    }
+  }
+
+  /// Real-time stream of pending registrations.
+  /// Used by AdminUsersScreen to auto-refresh when someone registers.
+  Stream<List<Map<String, dynamic>>> streamPendingUsers() {
+    return _col
+        .where('approval_status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((d) => <String, dynamic>{'uid': d.id, ...d.data()})
+          .toList();
+
+      // Newest first
+      list.sort((a, b) {
+        final aTime = a['registered_at'];
+        final bTime = b['registered_at'];
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        try {
+          return (bTime as dynamic)
+              .toDate()
+              .compareTo((aTime as dynamic).toDate());
+        } catch (_) {
+          return 0;
+        }
+      });
+      return list;
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  // STATS
   // ═══════════════════════════════════════════════
 
   Future<Map<String, int>> getUserTicketStats(String email) async {

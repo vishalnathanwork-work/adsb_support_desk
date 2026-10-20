@@ -6,7 +6,7 @@ import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/image_gallery.dart';
-import '../../widgets/status_badge.dart';
+import '../../widgets/tt_status_badge.dart';
 import '../adsb/adsb_chat_screen.dart';
 
 class TechnicianReviewScreen extends StatefulWidget {
@@ -117,7 +117,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                         ),
                       ),
                     ),
-                    StatusBadge(status: t.status),
+                    TTStatusBadge(status: t.status),
                   ],
                 ),
                 const SizedBox(height: 12),

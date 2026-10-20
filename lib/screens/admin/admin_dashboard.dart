@@ -5,15 +5,17 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
+import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
+import '../owner/notifications_screen.dart';
 import 'admin_all_ticket_screen.dart';
 import 'admin_team_management_screen.dart';
 import 'admin_users_screen.dart';
 import 'admin_preset_management_screen.dart';
-import 'analytics_screen.dart';
 import 'admin_clients_screen.dart';
 import 'admin_sites_screen.dart';
+import 'analytics_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   final UserModel user;
@@ -25,23 +27,7 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  List<Ticket> _all = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final list = await TicketService().getAllTickets();
-    if (!mounted) return;
-    setState(() {
-      _all = list;
-      _isLoading = false;
-    });
-  }
+  final _ticketService = TicketService();
 
   Future<void> _logout() async {
     await SessionService().clear();
@@ -60,11 +46,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
         NavTab(
           label: 'Home',
           icon: Icons.home_outlined,
-          page: _AdminHome(
-            user: widget.user,
-            tickets: _all,
-            isLoading: _isLoading,
-            onRefresh: _load,
+          page: StreamBuilder<List<Ticket>>(
+            stream: _ticketService.streamAllTickets(),
+            builder: (context, snapshot) {
+              final tickets = snapshot.data ?? [];
+              final loading =
+                  snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData;
+              return _AdminHome(
+                user: widget.user,
+                tickets: tickets,
+                isLoading: loading,
+                onRefresh: () {},
+              );
+            },
           ),
         ),
         NavTab(
@@ -73,9 +68,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
           page: AdminAllTicketsScreen(user: widget.user),
         ),
         NavTab(
+          label: 'History',
+          icon: Icons.history,
+          page: TicketHistoryScreen(
+            user: widget.user,
+            title: 'All Ticket History',
+            loader: () => TicketService().getAllTickets(),
+          ),
+        ),
+        NavTab(
           label: 'Teams',
           icon: Icons.groups_outlined,
           page: AdminTeamManagementScreen(user: widget.user),
+        ),
+        NavTab(
+          label: 'Alerts',
+          icon: Icons.notifications_outlined,
+          page: NotificationsScreen(user: widget.user),
         ),
         NavTab(
           label: 'Profile',
@@ -118,66 +127,54 @@ class _AdminHome extends StatelessWidget {
         .length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Dashboard'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Admin Dashboard')),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => onRefresh(),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1A1A1A), Color(0xFF333333)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A1A1A), Color(0xFF333333)],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Administrator',
-                        style: TextStyle(
-                            color: Colors.white70, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text(user.name,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold)),
-                  ],
-                ),
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(height: 24),
-              const Text('Key Metrics',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Column(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Administrator',
+                      style: TextStyle(
+                          color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text(user.name,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text('Key Metrics',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            if (isLoading)
+              const Center(child: CircularProgressIndicator())
+            else
+              Column(
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: _kpiCard(
-                            'Total',
-                            '$total',
-                            Icons.list_alt_outlined,
-                            AppColors.primary),
+                        child: _kpiCard('Total', '$total',
+                            Icons.list_alt_outlined, AppColors.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _kpiCard(
-                            'Open',
-                            '$open',
-                            Icons.pending_outlined,
-                            AppColors.warning),
+                        child: _kpiCard('Open', '$open',
+                            Icons.pending_outlined, AppColors.warning),
                       ),
                     ],
                   ),
@@ -185,125 +182,115 @@ class _AdminHome extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _kpiCard(
-                            'Resolved',
-                            '$resolved',
-                            Icons.check_circle_outline,
-                            AppColors.success),
+                        child: _kpiCard('Resolved', '$resolved',
+                            Icons.check_circle_outline, AppColors.success),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _kpiCard(
-                            'Avg Time',
-                            '—',
-                            Icons.timer_outlined,
-                            AppColors.accent),
+                        child: _kpiCard('Avg Time', '—',
+                            Icons.timer_outlined, AppColors.accent),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              const Text('Management',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              _actionTile(
+            const SizedBox(height: 24),
+            const Text('Management',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            _actionTile(
+              context,
+              Icons.confirmation_number_outlined,
+              'All Tickets',
+              'View and manage all tickets',
+              AppColors.primary,
+                  () => Navigator.push(
                 context,
-                Icons.confirmation_number_outlined,
-                'All Tickets',
-                'View and manage all tickets',
-                AppColors.primary,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AdminAllTicketsScreen(user: user),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => AdminAllTicketsScreen(user: user),
                 ),
               ),
-              _actionTile(
+            ),
+            _actionTile(
+              context,
+              Icons.groups_outlined,
+              'Team Management',
+              'ADSB + TT members',
+              AppColors.accent,
+                  () => Navigator.push(
                 context,
-                Icons.groups_outlined,
-                'Team Management',
-                'ADSB + TT members',
-                AppColors.accent,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AdminTeamManagementScreen(user: user),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => AdminTeamManagementScreen(user: user),
                 ),
               ),
-              _actionTile(
+            ),
+            _actionTile(
+              context,
+              Icons.people_outline,
+              'User Management',
+              'Clients and operators',
+              AppColors.warning,
+                  () => Navigator.push(
                 context,
-                Icons.people_outline,
-                'User Management',
-                'Clients and operators',
-                AppColors.warning,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AdminUsersScreen(user: user),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => AdminUsersScreen(user: user),
                 ),
               ),
-              _actionTile(
+            ),
+            _actionTile(
+              context,
+              Icons.business_outlined,
+              'Clients (Companies)',
+              'Manage client companies',
+              const Color(0xFF00838F),
+                  () => Navigator.push(
                 context,
-                Icons.tune,
-                'System Presets',
-                'Product types, issues, sites',
-                AppColors.textSecondary,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const AdminPresetManagementScreen(),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => const AdminClientsScreen(),
                 ),
               ),
-              _actionTile(
+            ),
+            _actionTile(
+              context,
+              Icons.location_city_outlined,
+              'Sites (Locations)',
+              'Manage hospitals and sites',
+              const Color(0xFF6A1B9A),
+                  () => Navigator.push(
                 context,
-                Icons.business_outlined,
-                'Clients (Companies)',
-                'Manage client companies and contacts',
-                const Color(0xFF00838F),           // teal
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AdminClientsScreen(),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => const AdminSitesScreen(),
                 ),
               ),
-              _actionTile(
+            ),
+            _actionTile(
+              context,
+              Icons.tune,
+              'System Presets',
+              'Product types, issues',
+              AppColors.textSecondary,
+                  () => Navigator.push(
                 context,
-                Icons.location_city_outlined,
-                'Sites (Locations)',
-                'Manage hospitals, clinics, parking sites',
-                const Color(0xFF6A1B9A),
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AdminSitesScreen(),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => const AdminPresetManagementScreen(),
                 ),
               ),
-              _actionTile(
+            ),
+            _actionTile(
+              context,
+              Icons.analytics_outlined,
+              'Analytics & Reporting',
+              'KPIs, trends, insights',
+              AppColors.success,
+                  () => Navigator.push(
                 context,
-                Icons.analytics_outlined,
-                'Analytics & Reporting',
-                'KPIs, trends, insights',
-                AppColors.success,
-                    () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AnalyticsScreen(),
-                  ),
+                MaterialPageRoute(
+                  builder: (_) => const AnalyticsScreen(),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

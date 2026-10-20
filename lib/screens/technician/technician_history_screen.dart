@@ -5,7 +5,7 @@ import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/status_badge.dart';
+import '../../widgets/tt_status_badge.dart';
 
 class TechnicianHistoryScreen extends StatefulWidget {
   final UserModel user;
@@ -94,8 +94,7 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
                           ),
                         ),
                       ),
-                      StatusBadge(status: t.status),
-                    ],
+                      TTStatusBadge(status: t.status),                    ],
                   ),
                   const SizedBox(height: 8),
                   Text(t.productType,

@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/chat_message.dart';
 import '../models/ticket_model.dart';
-import 'notification_service.dart';
 
 class ChatService {
   final _col = FirebaseFirestore.instance.collection('chat_messages');
@@ -33,6 +32,8 @@ class ChatService {
 
   // ═══════════════════════════════════════════════
   // SEND — user message with optional attachments
+  // NOTE: Notifications handled by Cloud Function
+  // notifyChatMessage (server-side).
   // ═══════════════════════════════════════════════
 
   Future<void> sendMessage({
@@ -66,29 +67,7 @@ class ChatService {
         'sent_at': FieldValue.serverTimestamp(),
       });
 
-      //NEW: Notify stakeholders
-      try {
-        final ticket = await FirebaseFirestore.instance
-            .collection('tickets')
-            .doc(ticketId)
-            .get();
-
-        if (ticket.exists) {
-          final data = ticket.data()!;
-          await NotificationService().onChatMessage(
-            ticketId: ticketId,
-            ticketSiteId: data['site_id'] ?? '',
-            senderEmail: senderEmail,
-            senderName: senderName,
-            senderRole: senderRole,
-            messagePreview: message.trim(),
-            ticketCreatedBy: data['created_by'] ?? '',
-            assigneeEmail: data['assigned_to'] as String?,
-          );
-        }
-      } catch (e) {
-        print('onChatMessage notification failed: $e');
-      }
+      // Notification handled by Cloud Function (server-side)
     } catch (e) {
       print('sendMessage error: $e');
     }
@@ -200,7 +179,6 @@ class ChatService {
     buffer.writeln('Site: ${t.siteName}');
     buffer.writeln('Location: ${t.siteLocation}');
 
-    // Lanes grouped by zone
     if (t.lanes.isNotEmpty) {
       buffer.writeln('Affected points:');
       final byZone = t.lanesByZone;

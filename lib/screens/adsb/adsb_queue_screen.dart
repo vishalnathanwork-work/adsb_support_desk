@@ -20,116 +20,86 @@ class AdsbQueueScreen extends StatefulWidget {
 
 class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   final _service = TicketService();
-  List<Ticket> _tickets = [];
-  bool _isLoading = true;
   String _filter = 'active';
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _isLoading = true);
-    final list = await _service.getActiveTickets();
-    if (!mounted) return;
-    setState(() {
-      _tickets = list;
-      _isLoading = false;
-    });
-  }
-
-  // ─── Counts ───
-  int get _pendingCount =>
-      _tickets.where((t) => t.status == 'pending').length;
-
-  int get _withTtCount =>
-      _tickets.where((t) => t.status == 'verified').length;
-
-  int get _onsiteCount => _tickets
-      .where((t) =>
-  t.status == 'pending_onsite' || t.status == 'in_progress')
-      .length;
-
-  // ─── Filtered list ───
-  List<Ticket> get _filtered {
-    switch (_filter) {
-      case 'pending':
-        return _tickets.where((t) => t.status == 'pending').toList();
-      case 'with_tt':
-        return _tickets.where((t) => t.status == 'verified').toList();
-      case 'onsite':
-        return _tickets
-            .where((t) =>
-        t.status == 'pending_onsite' ||
-            t.status == 'in_progress')
-            .toList();
-      case 'active':
-      default:
-        return _tickets;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Verification Queue'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ─── Filter chips ───
-          FilterChipRow(
-            selectedValue: _filter,
-            onSelected: (v) => setState(() => _filter = v),
-            options: [
-              const FilterOption(label: 'All Active', value: 'active'),
-              FilterOption(
-                label: 'Pending',
-                value: 'pending',
-                count: _pendingCount,
+      appBar: AppBar(title: const Text('Verification Queue')),
+      body: StreamBuilder<List<Ticket>>(
+        stream: _service.streamActiveTicketsForAdsb(),
+        builder: (context, snapshot) {
+          final allTickets = snapshot.data ?? [];
+          final isLoading =
+              snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData;
+
+          final pendingCount =
+              allTickets.where((t) => t.status == 'pending').length;
+          final withTtCount =
+              allTickets.where((t) => t.status == 'verified').length;
+          final onsiteCount = allTickets
+              .where((t) =>
+          t.status == 'pending_onsite' ||
+              t.status == 'in_progress')
+              .length;
+
+          final filtered = switch (_filter) {
+            'pending' =>
+                allTickets.where((t) => t.status == 'pending').toList(),
+            'with_tt' =>
+                allTickets.where((t) => t.status == 'verified').toList(),
+            'onsite' => allTickets
+                .where((t) =>
+            t.status == 'pending_onsite' ||
+                t.status == 'in_progress')
+                .toList(),
+            _ => allTickets,
+          };
+
+          return Column(
+            children: [
+              FilterChipRow(
+                selectedValue: _filter,
+                onSelected: (v) => setState(() => _filter = v),
+                options: [
+                  const FilterOption(label: 'All Active', value: 'active'),
+                  FilterOption(
+                    label: 'Pending',
+                    value: 'pending',
+                    count: pendingCount,
+                  ),
+                  FilterOption(
+                    label: 'With TT',
+                    value: 'with_tt',
+                    count: withTtCount,
+                  ),
+                  FilterOption(
+                    label: 'On-Site',
+                    value: 'onsite',
+                    count: onsiteCount,
+                  ),
+                ],
               ),
-              FilterOption(
-                label: 'With TT',
-                value: 'with_tt',
-                count: _withTtCount,
-              ),
-              FilterOption(
-                label: 'On-Site',
-                value: 'onsite',
-                count: _onsiteCount,
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filtered.isEmpty
+                    ? const EmptyState(
+                  icon: Icons.check_circle_outline,
+                  title: 'All caught up!',
+                  subtitle: 'No tickets in this view',
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) =>
+                      _ticketTile(filtered[i]),
+                ),
               ),
             ],
-          ),
-
-          // ─── List ───
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filtered.isEmpty
-                ? const EmptyState(
-              icon: Icons.check_circle_outline,
-              title: 'All caught up!',
-              subtitle: 'No tickets in this view',
-            )
-                : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                itemCount: _filtered.length,
-                itemBuilder: (context, i) =>
-                    _ticketTile(_filtered[i]),
-              ),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -150,7 +120,6 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ),
               ),
             );
-            _load();
           },
           borderRadius: BorderRadius.circular(AppRadii.lg),
           child: Container(
@@ -163,7 +132,6 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─── ID + Status (SINGLE badge) ───
                 Row(
                   children: [
                     Expanded(
@@ -181,8 +149,6 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // ─── Product + issue ───
                 Text(
                   t.productType,
                   style: const TextStyle(
@@ -203,8 +169,6 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 12),
-
-                // ─── Reporter + location + time ───
                 Row(
                   children: [
                     const Icon(
@@ -215,7 +179,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        '${t.createdByName} · ${t.siteName} · ${t.laneName}',
+                        '${t.createdByName} · ${t.siteName}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,

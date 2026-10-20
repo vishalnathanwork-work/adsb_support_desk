@@ -66,6 +66,19 @@ class _AdminTeamManagementScreenState
     }).toList();
   }
 
+  // ─── Create ───
+  Future<void> _openCreateForm() async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const UserFormSheet(
+        allowedRoles: ['adsb', 'technician', 'onsite', 'admin'],
+      ),
+    );
+    if (created == true) _load();
+  }
+
   // ─── Edit ───
   Future<void> _openEditForm(Map<String, dynamic> userData) async {
     final updated = await showModalBottomSheet<bool>(
@@ -107,6 +120,12 @@ class _AdminTeamManagementScreenState
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCreateForm,
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.group_add),
+        label: const Text('Add Member'),
+      ),
       body: Column(
         children: [
           // ─── Info banner ───
@@ -122,7 +141,7 @@ class _AdminTeamManagementScreenState
                 Expanded(
                   child: Text(
                     'Internal teams: ADSB Support, TT (Technical Advisor), '
-                        'On-Site Technicians, and Admins.',
+                        'On-Site Technicians, and Admins. Tap + Add Member to create.',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -211,7 +230,7 @@ class _AdminTeamManagementScreenState
                 ? const EmptyState(
               icon: Icons.groups_outlined,
               title: 'No team members',
-              subtitle: 'Try changing your filters',
+              subtitle: 'Tap + Add Member to create one',
             )
                 : RefreshIndicator(
               onRefresh: _load,

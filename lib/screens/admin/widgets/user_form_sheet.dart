@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../config/theme.dart';
 import '../../../models/client_model.dart';
 import '../../../models/site_model.dart';
@@ -29,6 +28,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
 
   late TextEditingController _nameController;
   late TextEditingController _emailController;
+  late TextEditingController _passwordController;
   late TextEditingController _phoneController;
   late TextEditingController _companyController;
 
@@ -41,12 +41,18 @@ class _UserFormSheetState extends State<UserFormSheet> {
   bool _loadingClients = true;
   bool _loadingSites = false;
   bool _isSaving = false;
+  bool _obscurePassword = true;
 
   bool get isEditMode => widget.existingUser != null;
-  bool get isExternalRole =>
-      widget.allowedRoles.contains('owner') ||
-          widget.allowedRoles.contains('operator');
-  bool get requiresClient => isExternalRole;
+
+  bool get requiresClient {
+    final r = _selectedRole ?? '';
+    return r == 'owner' || r == 'operator';
+  }
+
+  bool get hasExternalRole => widget.allowedRoles.any(
+        (r) => r == 'owner' || r == 'operator',
+  );
 
   @override
   void initState() {
@@ -55,15 +61,15 @@ class _UserFormSheetState extends State<UserFormSheet> {
 
     _nameController = TextEditingController(text: u?['name'] ?? '');
     _emailController = TextEditingController(text: u?['email'] ?? '');
+    _passwordController = TextEditingController();
     _phoneController = TextEditingController(text: u?['phone'] ?? '');
     _companyController = TextEditingController(text: u?['company'] ?? '');
     _selectedRole = u?['role'] ?? widget.allowedRoles.first;
 
     final siteIdsRaw = u?['site_ids'];
     if (siteIdsRaw is List) {
-      _selectedSiteIds = Set<String>.from(
-        siteIdsRaw.map((e) => e.toString()),
-      );
+      _selectedSiteIds =
+      Set<String>.from(siteIdsRaw.map((e) => e.toString()));
     } else if (siteIdsRaw is String && siteIdsRaw.isNotEmpty) {
       _selectedSiteIds = {siteIdsRaw};
     }
@@ -72,8 +78,12 @@ class _UserFormSheetState extends State<UserFormSheet> {
   }
 
   Future<void> _bootstrap() async {
-    setState(() => _loadingClients = true);
+    if (!hasExternalRole) {
+      setState(() => _loadingClients = false);
+      return;
+    }
 
+    setState(() => _loadingClients = true);
     final clients = await _clientService.getAllClients();
 
     final existingClientId = widget.existingUser?['client_id'] as String?;
@@ -104,9 +114,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
       _loadingSites = true;
       _clientSites = [];
     });
-
     final sites = await _siteService.getSitesByClientId(clientId);
-
     if (!mounted) return;
     setState(() {
       _clientSites = sites;
@@ -118,28 +126,24 @@ class _UserFormSheetState extends State<UserFormSheet> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
     _phoneController.dispose();
     _companyController.dispose();
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════
   // SAVE — Edit mode
-  // ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════
 
   Future<void> _saveEdit() async {
     if (!_formKey.currentState!.validate()) return;
     if (requiresClient && _selectedClient == null) {
-      _snack('Please select a owner', AppColors.error);
-      return;
-    }
-    if (requiresClient && _selectedSiteIds.isEmpty) {
-      _snack('Please assign at least one site', AppColors.error);
+      _snack('Please select a client', AppColors.error);
       return;
     }
 
     setState(() => _isSaving = true);
-
     final uid = widget.existingUser!['uid'] as String;
 
     final ok = await _userService.updateUser(
@@ -150,7 +154,9 @@ class _UserFormSheetState extends State<UserFormSheet> {
         'company': _companyController.text.trim(),
         'role': _selectedRole,
         'client_id': requiresClient ? _selectedClient?.id : null,
-        'site_ids': _selectedSiteIds.toList(),
+        'client_name': requiresClient ? _selectedClient?.name : null,
+        'site_ids':
+        requiresClient ? _selectedSiteIds.toList() : <String>[],
       },
     );
 
@@ -164,71 +170,40 @@ class _UserFormSheetState extends State<UserFormSheet> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // SAVE — Create mode
-  // ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════
+  // SAVE — Create mode (Cloud Function)
+  // ═══════════════════════════════════════════════
 
   Future<void> _saveCreate() async {
     if (!_formKey.currentState!.validate()) return;
     if (requiresClient && _selectedClient == null) {
-      _snack('Please select a owner', AppColors.error);
-      return;
-    }
-    if (requiresClient && _selectedSiteIds.isEmpty) {
-      _snack('Please assign at least one site', AppColors.error);
+      _snack('Please select a client', AppColors.error);
       return;
     }
 
-    final email = _emailController.text.trim().toLowerCase();
-    final name = _nameController.text.trim();
-    final role = _selectedRole!;
-    final phone = _phoneController.text.trim();
-    final company = _companyController.text.trim();
-    final clientId = requiresClient ? _selectedClient!.id : null;
-    final clientName = requiresClient ? _selectedClient!.name : null;
-    final siteIds = _selectedSiteIds.toList();
+    setState(() => _isSaving = true);
 
-    final suggestedPassword =
-        '${email.split('@').first}@${DateTime.now().year}';
-
-    final uid = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _UidEntryDialog(
-        email: email,
-        name: name,
-        role: role,
-        phone: phone,
-        company: company,
-        clientId: clientId,
-        clientName: clientName,
-        siteIds: siteIds,
-        suggestedPassword: suggestedPassword,
-      ),
+    final result = await _userService.adminCreateUser(
+      email: _emailController.text.trim().toLowerCase(),
+      password: _passwordController.text,
+      name: _nameController.text.trim(),
+      role: _selectedRole!,
+      phone: _phoneController.text.trim().isEmpty
+          ? null
+          : _phoneController.text.trim(),
+      clientId: requiresClient ? _selectedClient?.id : null,
+      clientName: requiresClient ? _selectedClient?.name : null,
+      siteIds: requiresClient ? _selectedSiteIds.toList() : <String>[],
     );
 
-    if (uid == null) return;
+    if (!mounted) return;
+    setState(() => _isSaving = false);
 
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'email': email,
-        'name': name,
-        'role': role,
-        'phone': phone.isEmpty ? null : phone,
-        'company': company.isEmpty ? null : company,
-        'client_id': clientId,
-        'client_name': clientName,
-        'site_ids': siteIds,
-        'is_active': true,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-      _snack('User added successfully', AppColors.success);
+    if (result.uid != null) {
+      _snack('User created successfully', AppColors.success);
       Navigator.pop(context, true);
-    } catch (e) {
-      _snack('Failed to save profile: $e', AppColors.error);
+    } else {
+      _snack(result.error ?? 'Failed to create user', AppColors.error);
     }
   }
 
@@ -238,9 +213,9 @@ class _UserFormSheetState extends State<UserFormSheet> {
     );
   }
 
-  // ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════
   // BUILD
-  // ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -267,18 +242,8 @@ class _UserFormSheetState extends State<UserFormSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
+              _handle(),
               const SizedBox(height: 20),
-
               Text(
                 isEditMode ? 'Edit User' : 'Add New User',
                 style: const TextStyle(
@@ -292,6 +257,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
               _label('Full Name'),
               TextFormField(
                 controller: _nameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   hintText: 'e.g. Ahmad bin Abdullah',
                   prefixIcon: Icon(Icons.person_outline),
@@ -306,11 +272,13 @@ class _UserFormSheetState extends State<UserFormSheet> {
               TextFormField(
                 controller: _emailController,
                 enabled: !isEditMode,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'user@example.com',
                   prefixIcon: const Icon(Icons.email_outlined),
-                  fillColor:
-                  isEditMode ? Colors.grey.shade100 : Colors.white,
+                  fillColor: isEditMode
+                      ? Colors.grey.shade100
+                      : Colors.white,
                   helperText: isEditMode
                       ? 'Email cannot be changed'
                       : 'User will use this to log in',
@@ -324,10 +292,40 @@ class _UserFormSheetState extends State<UserFormSheet> {
               ),
               const SizedBox(height: 16),
 
+              // Password (create mode only)
+              if (!isEditMode) ...[
+                _label('Temporary Password'),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    hintText: 'Minimum 6 characters',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() =>
+                      _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (v.length < 6) return 'Minimum 6 characters';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // Role
               _label('Role'),
               DropdownButtonFormField<String>(
-                value: _selectedRole,
+                initialValue: _selectedRole,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.badge_outlined),
                 ),
@@ -337,19 +335,27 @@ class _UserFormSheetState extends State<UserFormSheet> {
                   child: Text(_roleLabel(r)),
                 ))
                     .toList(),
-                onChanged: (v) => setState(() => _selectedRole = v),
+                onChanged: (v) {
+                  setState(() {
+                    _selectedRole = v;
+                    if (!requiresClient) {
+                      _selectedClient = null;
+                      _selectedSiteIds.clear();
+                    }
+                  });
+                },
                 validator: (v) => v == null ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
-              // ─── Client selection (external roles only) ───
+              // Client selection (external only)
               if (requiresClient) ...[
                 _label('Client (Company)'),
                 DropdownButtonFormField<String>(
-                  value: _selectedClient?.id,
+                  initialValue: _selectedClient?.id,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    hintText: 'Select which owner this user belongs to',
+                    hintText: 'Select which client this user belongs to',
                     prefixIcon: Icon(Icons.business_outlined),
                   ),
                   items: _allClients.map((c) {
@@ -375,7 +381,6 @@ class _UserFormSheetState extends State<UserFormSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // ─── Site selection ───
                 if (_selectedClient != null) ...[
                   _label('Assign Sites'),
                   _buildSiteSelector(),
@@ -395,22 +400,14 @@ class _UserFormSheetState extends State<UserFormSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Company (only external roles)
-              if (isExternalRole) ...[
+              // Company (external only)
+              if (hasExternalRole) ...[
                 _label('Company Name (Optional)'),
                 TextFormField(
                   controller: _companyController,
                   decoration: const InputDecoration(
-                    hintText: 'Auto-filled from selected owner',
+                    hintText: 'Auto-filled from selected client',
                     prefixIcon: Icon(Icons.apartment_outlined),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Tip: leave blank to use the owner name above.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -480,7 +477,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'This owner has no sites. Add sites in Firebase Console first.',
+                'This client has no sites yet.',
                 style: TextStyle(fontSize: 13),
               ),
             ),
@@ -511,46 +508,9 @@ class _UserFormSheetState extends State<UserFormSheet> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  site.address,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                if (site.zones.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: site.zones.map((zone) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: AppColors.primary.withOpacity(0.25),
-                            ),
-                          ),
-                          child: Text(
-                            zone.name,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-              ],
+            subtitle: Text(
+              site.address,
+              style: const TextStyle(fontSize: 11),
             ),
             onChanged: (val) {
               setState(() {
@@ -567,19 +527,28 @@ class _UserFormSheetState extends State<UserFormSheet> {
     );
   }
 
-  Widget _label(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
+  Widget _handle() => Center(
+    child: Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: AppColors.divider,
+        borderRadius: BorderRadius.circular(2),
       ),
-    );
-  }
+    ),
+  );
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
+    ),
+  );
 
   String _roleLabel(String role) {
     switch (role) {
@@ -598,147 +567,5 @@ class _UserFormSheetState extends State<UserFormSheet> {
       default:
         return role;
     }
-  }
-}
-
-// ═══════════════════════════════════════════════
-// UID ENTRY DIALOG
-// ═══════════════════════════════════════════════
-
-class _UidEntryDialog extends StatefulWidget {
-  final String email;
-  final String name;
-  final String role;
-  final String phone;
-  final String company;
-  final String? clientId;
-  final String? clientName;
-  final List<String> siteIds;
-  final String suggestedPassword;
-
-  const _UidEntryDialog({
-    required this.email,
-    required this.name,
-    required this.role,
-    required this.phone,
-    required this.company,
-    required this.clientId,
-    required this.clientName,
-    required this.siteIds,
-    required this.suggestedPassword,
-  });
-
-  @override
-  State<_UidEntryDialog> createState() => _UidEntryDialogState();
-}
-
-class _UidEntryDialogState extends State<_UidEntryDialog> {
-  final _uidController = TextEditingController();
-
-  @override
-  void dispose() {
-    _uidController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.vpn_key, color: AppColors.primary),
-          SizedBox(width: 8),
-          Text('Create Login in Firebase'),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Step 1 — Open Firebase Console → Authentication → Add user',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            _copyRow('Email', widget.email),
-            _copyRow('Password', widget.suggestedPassword),
-            if (widget.clientName != null)
-              _infoRow('Client', widget.clientName!),
-            _infoRow('Role', widget.role),
-            const SizedBox(height: 16),
-            const Text(
-              'Step 2 — Copy the new UID from Firebase and paste below:',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _uidController,
-              decoration: const InputDecoration(
-                hintText: 'Paste UID here',
-                prefixIcon: Icon(Icons.paste),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            final uid = _uidController.text.trim();
-            if (uid.isEmpty) return;
-            Navigator.pop(context, uid);
-          },
-          child: const Text('Confirm & Save'),
-        ),
-      ],
-    );
-  }
-
-  Widget _copyRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 70,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
-          ),
-          Expanded(
-            child: SelectableText(
-              value,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 70,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
-          ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(fontSize: 13)),
-          ),
-        ],
-      ),
-    );
   }
 }

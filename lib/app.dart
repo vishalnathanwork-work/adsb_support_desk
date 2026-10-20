@@ -12,12 +12,16 @@ import 'screens/technician/technician_dashboard.dart';
 import 'screens/onsite/onsite_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class AdsbSupportApp extends StatelessWidget {
   const AdsbSupportApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,

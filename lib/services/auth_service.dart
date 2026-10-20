@@ -1,13 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/cupertino.dart';
 import '../models/user_model.dart';
 import 'notification_listener.dart';
-import 'notification_service.dart';
-import 'package:flutter/foundation.dart';
-import 'notification_service.dart';
-import 'package:flutter/foundation.dart';
-import 'notification_service.dart';
 
 class AuthResult {
   final bool success;
@@ -52,12 +46,12 @@ class AuthService {
         'email': data['email'] ?? credential.user!.email ?? '',
       });
 
-      // ─── Pending approval — allow login, let router redirect ───
+      // Pending approval — allow login, router redirects
       if (user.isPendingApproval) {
         return AuthResult(success: true, user: user);
       }
 
-      // ─── Rejected / deactivated ───
+      // Rejected / deactivated
       if (!user.isActive) {
         await _auth.signOut();
         return AuthResult(
@@ -98,6 +92,13 @@ class AuthService {
 
   // ═══════════════════════════════════════════════
   // REGISTER (self-signup)
+  //
+  // NOTE: Notification to admins is handled by
+  // the Cloud Function notifyAdminsNewRegistration,
+  // which triggers when the user doc is created.
+  // Do NOT add client-side notification calls —
+  // they will fail (rules block reading admin list)
+  // and can create duplicates.
   // ═══════════════════════════════════════════════
 
   Future<AuthResult> register({
@@ -119,7 +120,8 @@ class AuthService {
 
       final uid = credential.user!.uid;
 
-      // 2. Create Firestore profile
+      // 2. Create Firestore profile (pending, inactive)
+      //    → This triggers notifyAdminsNewRegistration
       await _firestore.collection('users').doc(uid).set({
         'email': email.trim().toLowerCase(),
         'name': name.trim(),
@@ -137,19 +139,7 @@ class AuthService {
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      try {
-        debugPrint('🔵 Firing onNewUserRegistered for $email...');
-        await NotificationService().onNewUserRegistered(
-          userName: name.trim(),
-          userEmail: email.trim().toLowerCase(),
-          userRole: role,
-          siteIds: siteIds,
-        );
-        debugPrint('onNewUserRegistered fired successfully');
-      } catch (e) {
-        debugPrint('onNewUserRegistered failed: $e');
-      }
-
+      // 3. Build local model
       final user = UserModel(
         email: email.trim().toLowerCase(),
         name: name.trim(),
@@ -163,7 +153,6 @@ class AuthService {
         approvalStatus: 'pending',
         registeredAt: DateTime.now(),
       );
-
 
       return AuthResult(success: true, user: user);
     } on FirebaseAuthException catch (e) {
@@ -190,6 +179,17 @@ class AuthService {
   // ═══════════════════════════════════════════════
 
   Future<void> logout() async {
+    // Remove FCM token before signing out
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser != null && currentUser.email != null) {
+        final safeKey = currentUser.email!.replaceAll('.', '_');
+        await _firestore.collection('fcm_tokens').doc(safeKey).delete();
+      }
+    } catch (e) {
+      print('Failed to delete FCM token: $e');
+    }
+
     await AppNotificationListener().stop();
     await _auth.signOut();
   }

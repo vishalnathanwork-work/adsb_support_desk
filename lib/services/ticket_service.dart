@@ -1,12 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/ticket_model.dart';
-import 'notification_service.dart';
 
 class TicketService {
   final CollectionReference<Map<String, dynamic>> _col =
   FirebaseFirestore.instance.collection('tickets');
-
-  final _notif = NotificationService();
 
   // ═══════════════════════════════════════════════
   // READ — general
@@ -16,7 +13,8 @@ class TicketService {
     try {
       final snapshot = await _col.get();
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -28,9 +26,11 @@ class TicketService {
 
   Future<List<Ticket>> getMyTickets(String email) async {
     try {
-      final snapshot = await _col.where('created_by', isEqualTo: email).get();
+      final snapshot =
+      await _col.where('created_by', isEqualTo: email).get();
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -57,15 +57,18 @@ class TicketService {
 
   Future<List<Ticket>> getPendingTickets() => _byStatus('pending');
   Future<List<Ticket>> getVerifiedTickets() => _byStatus('verified');
-  Future<List<Ticket>> getInProgressTickets() => _byStatus('in_progress');
+  Future<List<Ticket>> getInProgressTickets() =>
+      _byStatus('in_progress');
   Future<List<Ticket>> getPendingOnsiteTickets() =>
       _byStatus('pending_onsite');
 
   Future<List<Ticket>> _byStatus(String status) async {
     try {
-      final snapshot = await _col.where('status', isEqualTo: status).get();
+      final snapshot =
+      await _col.where('status', isEqualTo: status).get();
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -93,7 +96,8 @@ class TicketService {
           .get();
 
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -103,7 +107,8 @@ class TicketService {
     }
   }
 
-  Future<List<Ticket>> getActiveTicketsForSites(List<String> siteIds) async {
+  Future<List<Ticket>> getActiveTicketsForSites(
+      List<String> siteIds) async {
     if (siteIds.isEmpty) return [];
     try {
       final chunks = <List<String>>[];
@@ -171,8 +176,13 @@ class TicketService {
       ])
           .get();
 
+      // TT team only handles Barrier, Payment Terminal, Intercom
+      const ttProducts = ['Barrier', 'Payment Terminal', 'Intercom'];
+
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .where((t) => ttProducts.contains(t.productType))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -181,10 +191,62 @@ class TicketService {
       return [];
     }
   }
-
   // ═══════════════════════════════════════════════
   // STREAMS
   // ═══════════════════════════════════════════════
+  /// Stream ALL tickets (admin dashboard).
+  ///
+  Stream<List<Ticket>> streamAllTickets() {
+    return _col.snapshots().map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// Stream active tickets for ADSB (verification + on-site).
+  Stream<List<Ticket>> streamActiveTicketsForAdsb() {
+    return _col
+        .where('status', whereIn: [
+      'pending',
+      'verified',
+      'pending_onsite',
+      'in_progress',
+    ])
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// Stream TT-relevant tickets (Barrier/Payment Terminal/Intercom only).
+  Stream<List<Ticket>> streamTTQueueTickets() {
+    const ttProducts = ['Barrier', 'Payment Terminal', 'Intercom'];
+    return _col
+        .where('status', whereIn: [
+      'verified',
+      'pending_onsite',
+      'in_progress',
+    ])
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .where((t) => ttProducts.contains(t.productType))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
 
   Stream<List<Ticket>> streamActiveTickets() {
     return _col
@@ -199,14 +261,16 @@ class TicketService {
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     });
   }
 
-  Stream<List<Ticket>> streamActiveTicketsForSites(List<String> siteIds) {
+  Stream<List<Ticket>> streamActiveTicketsForSites(
+      List<String> siteIds) {
     if (siteIds.isEmpty) return Stream.value([]);
     return _col
         .where('site_id', whereIn: siteIds)
@@ -221,7 +285,8 @@ class TicketService {
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
@@ -231,11 +296,13 @@ class TicketService {
   Stream<Map<String, int>> streamAdsbStats() {
     return streamActiveTickets().map((tickets) {
       final verify = tickets
-          .where((t) => t.status == 'pending' || t.status == 'verified')
+          .where((t) =>
+      t.status == 'pending' || t.status == 'verified')
           .length;
       final onsite = tickets
-          .where(
-              (t) => t.status == 'pending_onsite' || t.status == 'in_progress')
+          .where((t) =>
+      t.status == 'pending_onsite' ||
+          t.status == 'in_progress')
           .length;
       return {'verify': verify, 'onsite': onsite};
     });
@@ -247,7 +314,8 @@ class TicketService {
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) {
         final aUnclaimed = a.status == 'pending_onsite';
@@ -261,6 +329,8 @@ class TicketService {
 
   // ═══════════════════════════════════════════════
   // CREATE
+  // NOTE: Notifications are handled by Cloud Function
+  // notifyAdsbNewTicket (fires on ticket creation).
   // ═══════════════════════════════════════════════
 
   Future<Ticket?> createTicket({
@@ -270,7 +340,7 @@ class TicketService {
     required String siteId,
     required String siteName,
     required String siteLocation,
-    required List<Map<String, String>> lanes, // [{id, name, type, zone_id, zone_name}]
+    required List<Map<String, String>> lanes,
     required String productType,
     required String productIssue,
     required String contactName,
@@ -338,11 +408,8 @@ class TicketService {
 
       await Future.delayed(const Duration(milliseconds: 500));
 
-      final ticket = await getTicketById(ticketId);
-      if (ticket != null) {
-        await _notif.onTicketCreated(ticket);
-      }
-      return ticket;
+      // Notifications handled by Cloud Function (server-side)
+      return await getTicketById(ticketId);
     } catch (e) {
       print('createTicket error: $e');
       return null;
@@ -351,6 +418,8 @@ class TicketService {
 
   // ═══════════════════════════════════════════════
   // UPDATE
+  // NOTE: All notifications for status changes
+  // are handled by Cloud Function notifyTicketUpdated.
   // ═══════════════════════════════════════════════
 
   Future<bool> updateTicketFields(
@@ -390,11 +459,6 @@ class TicketService {
       'verified_at': FieldValue.serverTimestamp(),
       'escalated_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onEscalatedToTT(fresh);
-    }
   }
 
   Future<void> autoEscalateIfNeeded({
@@ -416,11 +480,6 @@ class TicketService {
       'escalated_at': FieldValue.serverTimestamp(),
       'tt_notified_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onEscalatedToTT(fresh);
-    }
   }
 
   Future<void> markTTReviewed({
@@ -433,11 +492,6 @@ class TicketService {
       'tt_advisor_name': ttName,
       'tt_solution_provided_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onTTReplied(fresh);
-    }
   }
 
   Future<void> resolveRemotely(
@@ -449,11 +503,6 @@ class TicketService {
       'remote_fix_at': FieldValue.serverTimestamp(),
       'resolved_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onRemoteResolution(fresh);
-    }
   }
 
   Future<void> sendToOnsiteQueue(String ticketId) async {
@@ -461,11 +510,6 @@ class TicketService {
       'status': 'pending_onsite',
       'tt_solution_provided_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onSentToOnsite(fresh);
-    }
   }
 
   Future<void> claimOnsiteJob({
@@ -479,11 +523,6 @@ class TicketService {
       'assigned_to_name': adsbName,
       'adsb_pickup_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onJobClaimed(fresh);
-    }
   }
 
   Future<void> completeOnSite({
@@ -513,11 +552,6 @@ class TicketService {
     }
 
     await updateTicketFields(ticketId, fields);
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onJobCompleted(fresh);
-    }
   }
 
   Future<void> confirmResolution(String ticketId) async {
@@ -525,11 +559,6 @@ class TicketService {
       'status': 'closed',
       'client_confirmed_at': FieldValue.serverTimestamp(),
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onClientConfirmed(fresh);
-    }
   }
 
   Future<void> reopenTicket(String ticketId) async {
@@ -539,20 +568,10 @@ class TicketService {
       'assigned_to': null,
       'assigned_to_name': null,
     });
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onTicketReopened(fresh);
-    }
   }
 
   Future<void> cancelTicket(String ticketId) async {
     await updateTicketFields(ticketId, {'status': 'cancelled'});
-
-    final fresh = await getTicketById(ticketId);
-    if (fresh != null) {
-      await _notif.onTicketCancelled(fresh);
-    }
   }
 
   // ═══════════════════════════════════════════════
@@ -588,7 +607,8 @@ class TicketService {
       final snap =
       await _col.where('assigned_to', isEqualTo: email).get();
       final list = snap.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       return list;
@@ -603,7 +623,8 @@ class TicketService {
       final snap =
       await _col.where('created_by', isEqualTo: email).get();
       final list = snap.docs
-          .map((doc) => Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
+          .map((doc) =>
+          Ticket.fromJson({...doc.data(), 'ticket_id': doc.id}))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;

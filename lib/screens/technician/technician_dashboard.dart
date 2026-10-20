@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/session_service.dart';
 import 'package:adsb_support_desk/services/auth_service.dart';
@@ -20,36 +21,7 @@ class TechnicianDashboard extends StatefulWidget {
 
 class _TechnicianDashboardState extends State<TechnicianDashboard> {
   final _authService = AuthService();
-  int _queueCount = 0;
-  int _handledCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
-    final service = TicketService();
-    final queue = await service.getVerifiedTickets();
-    final all = await service.getAllTickets();
-
-    // Tickets that TT has already provided advice on
-    final handled = all
-        .where((t) =>
-    t.assignedTo == widget.user.email &&
-        t.assignedToName == widget.user.name &&
-        (t.status == 'in_progress' ||
-            t.status == 'resolved' ||
-            t.status == 'closed'))
-        .length;
-
-    if (!mounted) return;
-    setState(() {
-      _queueCount = queue.length;
-      _handledCount = handled;
-    });
-  }
+  final _ticketService = TicketService();
 
   @override
   Widget build(BuildContext context) {
@@ -59,11 +31,33 @@ class _TechnicianDashboardState extends State<TechnicianDashboard> {
         NavTab(
           label: 'Home',
           icon: Icons.home_outlined,
-          page: _TTAdvisorHome(
-            user: widget.user,
-            queueCount: _queueCount,
-            handledCount: _handledCount,
-            onRefresh: _loadStats,
+          page: StreamBuilder<List<Ticket>>(
+            stream: _ticketService.streamTTQueueTickets(),
+            builder: (context, snapshot) {
+              final tickets = snapshot.data ?? [];
+              final isLoading =
+                  snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData;
+
+              final queueCount =
+                  tickets.where((t) => t.status == 'verified').length;
+
+              final handledCount = tickets
+                  .where((t) =>
+              t.assignedTo == widget.user.email &&
+                  (t.status == 'in_progress' ||
+                      t.status == 'resolved' ||
+                      t.status == 'closed'))
+                  .length;
+
+              return _TTAdvisorHome(
+                user: widget.user,
+                queueCount: queueCount,
+                handledCount: handledCount,
+                isLoading: isLoading,
+                onRefresh: () {},
+              );
+            },
           ),
         ),
         NavTab(
@@ -100,24 +94,21 @@ class _TTAdvisorHome extends StatelessWidget {
   final UserModel user;
   final int queueCount;
   final int handledCount;
+  final bool isLoading;
   final VoidCallback onRefresh;
 
   const _TTAdvisorHome({
     required this.user,
     required this.queueCount,
     required this.handledCount,
+    required this.isLoading,
     required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Technical Advisor'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Technical Advisor')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -137,7 +128,8 @@ class _TTAdvisorHome extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Technical Advisor',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      style: TextStyle(
+                          color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(user.name,
                       style: const TextStyle(
@@ -155,14 +147,15 @@ class _TTAdvisorHome extends StatelessWidget {
 
             // Stats
             const Text('Your Stats',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: _statCard(
                     label: 'Pending',
-                    value: '$queueCount',
+                    value: isLoading ? '…' : '$queueCount',
                     icon: Icons.pending_outlined,
                     color: AppColors.warning,
                   ),
@@ -171,7 +164,7 @@ class _TTAdvisorHome extends StatelessWidget {
                 Expanded(
                   child: _statCard(
                     label: 'Handled',
-                    value: '$handledCount',
+                    value: isLoading ? '…' : '$handledCount',
                     icon: Icons.check_circle_outline,
                     color: AppColors.success,
                   ),
@@ -186,16 +179,20 @@ class _TTAdvisorHome extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                border:
+                Border.all(color: AppColors.primary.withOpacity(0.2)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+                  Icon(Icons.info_outline,
+                      color: AppColors.primary, size: 20),
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Your role: Analyze escalated tickets, provide root cause advice, and assign the ADSB on-site team to attend the location.',
+                      'You handle Barrier, Payment Terminal, and Intercom '
+                          'products. Review escalated tickets and advise the '
+                          'ADSB team via chat.',
                       style: TextStyle(fontSize: 12, height: 1.5),
                     ),
                   ),
@@ -206,7 +203,8 @@ class _TTAdvisorHome extends StatelessWidget {
 
             // Quick actions
             const Text('Quick Actions',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             _actionTile(
               context,
@@ -260,7 +258,9 @@ class _TTAdvisorHome extends StatelessWidget {
           const SizedBox(height: 12),
           Text(value,
               style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
           const SizedBox(height: 2),
           Text(label,
               style: const TextStyle(
@@ -307,15 +307,18 @@ class _TTAdvisorHome extends StatelessWidget {
                 children: [
                   Text(title,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(subtitle,
                       style: const TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary)),
+                          fontSize: 12,
+                          color: AppColors.textSecondary)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textSecondary),
           ],
         ),
       ),

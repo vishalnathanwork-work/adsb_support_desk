@@ -6,8 +6,9 @@ import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/filter_chip_row.dart';
-import '../../widgets/status_badge.dart';
 import 'technician_review_screen.dart';
+import '../../widgets/tt_status_badge.dart';
+
 
 class TechnicianQueueScreen extends StatefulWidget {
   final UserModel user;
@@ -15,23 +16,14 @@ class TechnicianQueueScreen extends StatefulWidget {
   const TechnicianQueueScreen({super.key, required this.user});
 
   @override
-  State<TechnicianQueueScreen> createState() => _TechnicianQueueScreenState();
+  State<TechnicianQueueScreen> createState() =>
+      _TechnicianQueueScreenState();
 }
 
 class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
   final _service = TicketService();
-
-  List<Ticket> _all = [];
-  List<Ticket> _filtered = [];
-  bool _isLoading = true;
   String _filter = 'awaiting';
   final _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
 
   @override
   void dispose() {
@@ -39,149 +31,123 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _isLoading = true);
-    final list = await _service.getTTQueueTickets();
-    if (!mounted) return;
-    setState(() {
-      _all = list;
-      _isLoading = false;
-      _applyFilter();
-    });
-  }
-
-  void _applyFilter() {
-    final q = _searchController.text.trim().toLowerCase();
-
-    _filtered = _all.where((t) {
-      bool statusMatch = true;
-      switch (_filter) {
-        case 'awaiting':
-          statusMatch = t.status == 'verified';
-          break;
-        case 'onsite':
-          statusMatch =
-              t.status == 'pending_onsite' || t.status == 'in_progress';
-          break;
-        case 'all':
-        default:
-          statusMatch = true;
-      }
-
-      final searchMatch = q.isEmpty ||
-          t.id.toLowerCase().contains(q) ||
-          t.productType.toLowerCase().contains(q) ||
-          t.productIssue.toLowerCase().contains(q) ||
-          t.siteName.toLowerCase().contains(q) ||
-          t.createdByName.toLowerCase().contains(q);
-
-      return statusMatch && searchMatch;
-    }).toList();
-  }
-
-  // ─── Counts ───
-  int get _awaitingCount =>
-      _all.where((t) => t.status == 'verified').length;
-
-  int get _onsiteCount => _all
-      .where((t) =>
-  t.status == 'pending_onsite' || t.status == 'in_progress')
-      .length;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reviews'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ─── Search ───
-          Container(
-            color: AppColors.surface,
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.sm,
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(_applyFilter),
-              decoration: const InputDecoration(
-                hintText: 'Search by ID, product, or site...',
-                prefixIcon: Icon(Icons.search),
-                filled: true,
-              ),
-            ),
-          ),
+      appBar: AppBar(title: const Text('Reviews')),
+      body: StreamBuilder<List<Ticket>>(
+        stream: _service.streamTTQueueTickets(),
+        builder: (context, snapshot) {
+          final allTickets = snapshot.data ?? [];
+          final isLoading =
+              snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData;
 
-          // ─── Filter chips ───
-          FilterChipRow(
-            selectedValue: _filter,
-            onSelected: (v) {
-              setState(() {
-                _filter = v;
-                _applyFilter();
-              });
-            },
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.md,
-            ),
-            options: [
-              FilterOption(
-                label: 'Awaiting You',
-                value: 'awaiting',
-                count: _awaitingCount,
-              ),
-              FilterOption(
-                label: 'On-Site',
-                value: 'onsite',
-                count: _onsiteCount,
-              ),
-              const FilterOption(label: 'All', value: 'all'),
-            ],
-          ),
+          final awaitingCount =
+              allTickets.where((t) => t.status == 'verified').length;
+          final onsiteCount = allTickets
+              .where((t) =>
+          t.status == 'pending_onsite' ||
+              t.status == 'in_progress')
+              .length;
 
-          // ─── List ───
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filtered.isEmpty
-                ? EmptyState(
-              icon: Icons.check_circle_outline,
-              title: _filter == 'awaiting'
-                  ? 'All caught up!'
-                  : 'No tickets found',
-              subtitle: _filter == 'awaiting'
-                  ? 'No tickets awaiting your review'
-                  : 'Try changing your filter',
-            )
-                : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
+          final q = _searchController.text.trim().toLowerCase();
+
+          final filtered = allTickets.where((t) {
+            bool statusMatch;
+            switch (_filter) {
+              case 'awaiting':
+                statusMatch = t.status == 'verified';
+                break;
+              case 'onsite':
+                statusMatch = t.status == 'pending_onsite' ||
+                    t.status == 'in_progress';
+                break;
+              default:
+                statusMatch = true;
+            }
+
+            final searchMatch = q.isEmpty ||
+                t.id.toLowerCase().contains(q) ||
+                t.productType.toLowerCase().contains(q) ||
+                t.productIssue.toLowerCase().contains(q) ||
+                t.siteName.toLowerCase().contains(q) ||
+                t.createdByName.toLowerCase().contains(q);
+
+            return statusMatch && searchMatch;
+          }).toList();
+
+          return Column(
+            children: [
+              Container(
+                color: AppColors.surface,
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg,
-                  0,
+                  AppSpacing.md,
                   AppSpacing.lg,
-                  AppSpacing.xl,
+                  AppSpacing.sm,
                 ),
-                itemCount: _filtered.length,
-                itemBuilder: (context, i) =>
-                    _ticketCard(_filtered[i]),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Search...',
+                    prefixIcon: Icon(Icons.search),
+                    filled: true,
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+              FilterChipRow(
+                selectedValue: _filter,
+                onSelected: (v) => setState(() => _filter = v),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                options: [
+                  FilterOption(
+                    label: 'Awaiting You',
+                    value: 'awaiting',
+                    count: awaitingCount,
+                  ),
+                  FilterOption(
+                    label: 'On-Site',
+                    value: 'onsite',
+                    count: onsiteCount,
+                  ),
+                  const FilterOption(label: 'All', value: 'all'),
+                ],
+              ),
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filtered.isEmpty
+                    ? EmptyState(
+                  icon: Icons.check_circle_outline,
+                  title: _filter == 'awaiting'
+                      ? 'All caught up!'
+                      : 'No tickets found',
+                  subtitle: _filter == 'awaiting'
+                      ? 'No tickets awaiting your review'
+                      : 'Try changing your filter',
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    0,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) =>
+                      _ticketCard(filtered[i]),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -202,7 +168,6 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                 ),
               ),
             );
-            _load();
           },
           borderRadius: BorderRadius.circular(AppRadii.lg),
           child: Container(
@@ -215,7 +180,6 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─── ID + Status (single badge) ───
                 Row(
                   children: [
                     Expanded(
@@ -229,49 +193,29 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                         ),
                       ),
                     ),
-                    StatusBadge(status: t.status),
+                    TTStatusBadge(status: t.status),
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // ─── Product + Issue ───
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.build_outlined,
-                      size: 15,
-                      color: AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        t.productType,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Padding(
-                  padding: const EdgeInsets.only(left: 21),
-                  child: Text(
-                    t.productIssue,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                Text(
+                  t.productType,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 3),
+                Text(
+                  t.productIssue,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 12),
-
-                // ─── Location ───
                 Row(
                   children: [
                     const Icon(
@@ -282,34 +226,12 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        '${t.siteName} · ${t.laneName} (${t.laneDirectionDisplay})',
+                        '${t.siteName} · ${t.lanesSummary}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
                         ),
                         overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // ─── Reporter + Time ───
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.person_outline,
-                      size: 12,
-                      color: AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Reported by ${t.createdByName}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
-                        ),
                       ),
                     ),
                     Text(

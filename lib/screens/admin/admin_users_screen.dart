@@ -80,9 +80,21 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     }).toList();
   }
 
-  // ─── Safe parse: handles List, String, or null ───
   List<String> _siteIdsOf(Map<String, dynamic> u) {
     return _parseSiteIds(u['site_ids']);
+  }
+
+  // ─── Create ───
+  Future<void> _openCreateForm() async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const UserFormSheet(
+        allowedRoles: ['owner', 'operator'],
+      ),
+    );
+    if (created == true) _load();
   }
 
   // ─── Edit ───
@@ -139,6 +151,12 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCreateForm,
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.person_add),
+        label: const Text('Add User'),
       ),
       body: Column(
         children: [
@@ -279,7 +297,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 ? const EmptyState(
               icon: Icons.people_outline,
               title: 'No users found',
-              subtitle: 'Users appear here after self-registration + approval',            )
+              subtitle:
+              'Tap + Add User or wait for self-registration',
+            )
                 : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
@@ -300,7 +320,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  // ─── Pending list popup ───
   Future<void> _showPendingList() async {
     final picked = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -561,10 +580,9 @@ class _PendingListSheet extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════
-// SAFE HELPERS — top-level
+// SAFE HELPERS
 // ═══════════════════════════════════════════════
 
-/// Safe parse: handles List, String, or null.
 List<String> _parseSiteIds(dynamic value) {
   if (value == null) return [];
   if (value is List) return value.map((e) => e.toString()).toList();

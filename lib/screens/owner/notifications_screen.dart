@@ -5,6 +5,8 @@ import '../../models/user_model.dart';
 import '../../services/notification_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
+import '../admin/admin_users_screen.dart';
+import '../adsb/adsb_chat_screen.dart';
 import 'ticket_detail_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -23,6 +25,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _open(AppNotification n) async {
     await _service.markAsRead(n.id);
     if (!mounted) return;
+
+    // 1. Registration → User Management (admin)
+    if (n.type == 'user_registration') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdminUsersScreen(user: widget.user),
+        ),
+      );
+      return;
+    }
+
+    // 2. Empty ticket (approval/rejection) → nothing
+    if (n.ticketId.isEmpty) return;
+
+    // 3. Chat message → open chat directly
+    if (n.type == 'chat_message') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdsbChatScreen(
+            ticketId: n.ticketId,
+            user: widget.user,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 4. Everything else → ticket detail
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -80,7 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             return const EmptyState(
               icon: Icons.notifications_none,
               title: 'No notifications',
-              subtitle: 'Updates about your tickets will appear here',
+              subtitle: 'Updates will appear here',
             );
           }
 
@@ -88,7 +120,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
           return Column(
             children: [
-              // Filter chips
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 color: Colors.white,
@@ -119,8 +150,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ),
               ),
-
-              // List
               Expanded(
                 child: filtered.isEmpty
                     ? const EmptyState(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
@@ -18,29 +19,7 @@ class OnsiteDashboard extends StatefulWidget {
 }
 
 class _OnsiteDashboardState extends State<OnsiteDashboard> {
-  int _unclaimedCount = 0;
-  int _myJobsCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
-    final service = TicketService();
-    final unclaimed = await service.getPendingOnsiteTickets();
-    final inProgress = await service.getInProgressTickets();
-    final myJobs = inProgress
-        .where((t) => t.assignedTo == widget.user.email)
-        .length;
-
-    if (!mounted) return;
-    setState(() {
-      _unclaimedCount = unclaimed.length;
-      _myJobsCount = myJobs;
-    });
-  }
+  final _ticketService = TicketService();
 
   @override
   Widget build(BuildContext context) {
@@ -50,11 +29,24 @@ class _OnsiteDashboardState extends State<OnsiteDashboard> {
         NavTab(
           label: 'Home',
           icon: Icons.home_outlined,
-          page: _OnsiteHome(
-            user: widget.user,
-            unclaimedCount: _unclaimedCount,
-            myJobsCount: _myJobsCount,
-            onRefresh: _loadStats,
+          page: StreamBuilder<List<Ticket>>(
+            stream: _ticketService.streamOnsiteQueue(),
+            builder: (context, snapshot) {
+              final tickets = snapshot.data ?? [];
+              final unclaimed =
+                  tickets.where((t) => t.status == 'pending_onsite').length;
+              final myJobs = tickets
+                  .where((t) =>
+              t.status == 'in_progress' &&
+                  t.assignedTo == widget.user.email)
+                  .length;
+              return _OnsiteHome(
+                user: widget.user,
+                unclaimedCount: unclaimed,
+                myJobsCount: myJobs,
+                onRefresh: () {},
+              );
+            },
           ),
         ),
         NavTab(
@@ -62,7 +54,6 @@ class _OnsiteDashboardState extends State<OnsiteDashboard> {
           icon: Icons.work_outline,
           page: OnsiteQueueScreen(user: widget.user),
         ),
-
         NavTab(
           label: 'Profile',
           icon: Icons.person_outline,
@@ -99,13 +90,7 @@ class _OnsiteHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('On-Site Team'),
-        actions: [
-          IconButton(
-              icon: const Icon(Icons.refresh), onPressed: onRefresh),
-        ],
-      ),
+      appBar: AppBar(title: const Text('On-Site Team')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -122,8 +107,8 @@ class _OnsiteHome extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('On-Site Technician',
-                      style:
-                      TextStyle(color: Colors.white70, fontSize: 13)),
+                      style: TextStyle(
+                          color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(user.name,
                       style: const TextStyle(
@@ -160,10 +145,6 @@ class _OnsiteHome extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            const Text('Quick Actions',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
             _actionTile(
               context,
               Icons.work_outline,

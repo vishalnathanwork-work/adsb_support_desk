@@ -201,16 +201,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     final isInProgress = t.status == 'in_progress' && isMine;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(t.id),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            tooltip: 'Open chat',
-            onPressed: _openChat,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(t.id)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -236,8 +227,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 _row('Contact', '${t.contactName} — ${t.contactPhone}'),
                 _row('Site', t.siteName),
                 _row('Address', t.siteLocation),
-                _row('Parking',
-                    '${t.laneName} (${t.laneDirectionDisplay})'),
+                _row('Lanes', t.lanesSummary),
                 _row('Product', t.productType),
                 if (t.productIssue.isNotEmpty)
                   _row('Issue', t.productIssue),
@@ -299,6 +289,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
               const SizedBox(height: 12),
               SizedBox(
                 height: 52,
+                width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _isWorking ? null : _claimJob,
                   icon: const Icon(Icons.handyman_outlined),
@@ -323,8 +314,35 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 ),
               ),
             ] else if (isInProgress) ...[
+              // ─── Chat button (top) ───
               SizedBox(
                 height: 52,
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _openChat,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text(
+                    'Open Chat',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ─── Job Completed button ───
+              SizedBox(
+                height: 52,
+                width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _isWorking ? null : _openResolutionForm,
                   icon: const Icon(Icons.check_circle_outline),
@@ -335,10 +353,13 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2),
                   )
-                      : const Text('Job Completed',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600)),
+                      : const Text(
+                    'Job Completed',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
@@ -465,7 +486,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 }
 
 // ═══════════════════════════════════════════════
-// RESOLUTION SHEET — with REQUIRED completion evidence
+// RESOLUTION SHEET (unchanged — keep the existing one below)
 // ═══════════════════════════════════════════════
 
 class _ResolutionSheet extends StatefulWidget {
@@ -663,7 +684,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
             ),
             const SizedBox(height: 20),
 
-            // ─── Root cause ───
+            // Root cause
             const Text(
               'Root Cause',
               style: TextStyle(
@@ -673,7 +694,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _rootCause,
+              initialValue: _rootCause,
               decoration: const InputDecoration(
                 hintText: 'Select root cause',
               ),
@@ -695,7 +716,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
             const SizedBox(height: 16),
 
-            // ─── Solution ───
+            // Solution
             const Text(
               'Solution Applied',
               style: TextStyle(
@@ -705,7 +726,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _solution,
+              initialValue: _solution,
               decoration: const InputDecoration(
                 hintText: 'Select solution',
               ),
@@ -727,7 +748,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
             const SizedBox(height: 16),
 
-            // ─── Notes ───
+            // Notes
             const Text(
               'Additional Notes (Optional)',
               style: TextStyle(
@@ -746,7 +767,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
             const SizedBox(height: 16),
 
-            // ─── Completion Evidence (REQUIRED) ───
+            // Evidence (required)
             Row(
               children: [
                 const Text(
@@ -904,7 +925,6 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
             const SizedBox(height: 24),
 
-            // ─── Submit ───
             SizedBox(
               height: 52,
               width: double.infinity,

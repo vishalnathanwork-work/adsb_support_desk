@@ -62,17 +62,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     }
   }
 
-  Future<void> _callTTAdvisor() async {
-    const ttPhone = '+60 12-345 6792';
-    final uri = Uri.parse('tel:$ttPhone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      if (!mounted) return;
-      _snack('Cannot call TT advisor', AppColors.error);
-    }
-  }
-
   // ═══════════════════════════════════════════════
   // OPEN CHAT
   // ═══════════════════════════════════════════════
@@ -235,10 +224,7 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
                 if (t.productIssue.isNotEmpty)
                   _row('Issue', t.productIssue),
                 _row('Site', '${t.siteName} — ${t.siteLocation}'),
-                _row(
-                  'Parking',
-                  '${t.laneName} (${t.laneDirectionDisplay})',
-                ),
+                _row('Lanes', t.lanesSummary),
                 _row('Reported', DateFormatter.full(t.createdAt)),
                 if (t.description.isNotEmpty)
                   _row('Description', t.description),
@@ -264,29 +250,14 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
 
             const SizedBox(height: AppSpacing.md),
 
-            // Call Client + Call TT Team side by side
-            Row(
-              children: [
-                Expanded(
-                  child: _compactActionButton(
-                    icon: Icons.phone_in_talk_outlined,
-                    label: 'Call Client',
-                    color: AppColors.primary,
-                    onTap: !_isClosedOrCancelled && !_isWorking
-                        ? _callClient
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: _compactActionButton(
-                    icon: Icons.phone_in_talk_outlined,
-                    label: 'Call TT Team',
-                    color: const Color(0xFF5E35B1),
-                    onTap: !_isWorking ? _callTTAdvisor : null,
-                  ),
-                ),
-              ],
+            // Call Client — full width
+            _primaryActionButton(
+              icon: Icons.phone_in_talk_outlined,
+              label: 'Call Client',
+              color: AppColors.primary,
+              onTap: !_isClosedOrCancelled && !_isWorking
+                  ? _callClient
+                  : null,
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -425,45 +396,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.md),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _compactActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback? onTap,
-  }) {
-    final enabled = onTap != null;
-    return SizedBox(
-      height: 56,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? color : AppColors.divider,
-          foregroundColor:
-          enabled ? Colors.white : AppColors.textTertiary,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadii.md),
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ),
       ),
     );
