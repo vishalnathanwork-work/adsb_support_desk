@@ -128,27 +128,6 @@ class _AdminTeamManagementScreenState
       ),
       body: Column(
         children: [
-          // ─── Info banner ───
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            color: AppColors.primary.withOpacity(0.06),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline,
-                    color: AppColors.primary, size: 18),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Internal teams: ADSB Support, TT (Technical Advisor), '
-                        'On-Site Technicians, and Admins. Tap + Add Member to create.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           // ─── Search ───
           Container(
             color: AppColors.surface,

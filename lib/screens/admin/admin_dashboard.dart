@@ -5,7 +5,6 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
-import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
 import '../owner/notifications_screen.dart';
@@ -68,15 +67,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           page: AdminAllTicketsScreen(user: widget.user),
         ),
         NavTab(
-          label: 'History',
-          icon: Icons.history,
-          page: TicketHistoryScreen(
-            user: widget.user,
-            title: 'All Ticket History',
-            loader: () => TicketService().getAllTickets(),
-          ),
-        ),
-        NavTab(
           label: 'Teams',
           icon: Icons.groups_outlined,
           page: AdminTeamManagementScreen(user: widget.user),
@@ -121,9 +111,6 @@ class _AdminHome extends StatelessWidget {
         t.status == 'verified' ||
         t.status == 'pending_onsite' ||
         t.status == 'in_progress')
-        .length;
-    final resolved = tickets
-        .where((t) => t.status == 'resolved' || t.status == 'closed')
         .length;
 
     return Scaffold(
@@ -178,20 +165,6 @@ class _AdminHome extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _kpiCard('Resolved', '$resolved',
-                            Icons.check_circle_outline, AppColors.success),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _kpiCard('Avg Time', '—',
-                            Icons.timer_outlined, AppColors.accent),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             const SizedBox(height: 24),
@@ -216,7 +189,7 @@ class _AdminHome extends StatelessWidget {
               context,
               Icons.groups_outlined,
               'Team Management',
-              'ADSB + TT members',
+              'ADSB Members + TT Members',
               AppColors.accent,
                   () => Navigator.push(
                 context,
@@ -229,7 +202,7 @@ class _AdminHome extends StatelessWidget {
               context,
               Icons.people_outline,
               'User Management',
-              'Clients and operators',
+              'Owner and Operators',
               AppColors.warning,
                   () => Navigator.push(
                 context,
@@ -241,8 +214,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.business_outlined,
-              'Clients (Companies)',
-              'Manage client companies',
+              'Clients',
+              'Manage companies',
               const Color(0xFF00838F),
                   () => Navigator.push(
                 context,
@@ -255,7 +228,7 @@ class _AdminHome extends StatelessWidget {
               context,
               Icons.location_city_outlined,
               'Sites (Locations)',
-              'Manage hospitals and sites',
+              'Manage sites',
               const Color(0xFF6A1B9A),
                   () => Navigator.push(
                 context,
@@ -268,7 +241,7 @@ class _AdminHome extends StatelessWidget {
               context,
               Icons.tune,
               'System Presets',
-              'Product types, issues',
+              'Product types, Issues',
               AppColors.textSecondary,
                   () => Navigator.push(
                 context,
@@ -281,7 +254,7 @@ class _AdminHome extends StatelessWidget {
               context,
               Icons.analytics_outlined,
               'Analytics & Reporting',
-              'KPIs, trends, insights',
+              'System metrics and reports',
               AppColors.success,
                   () => Navigator.push(
                 context,

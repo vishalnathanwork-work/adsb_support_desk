@@ -18,12 +18,24 @@ class AppNotificationListener {
   String? _currentUserRole;
   List<String> _currentUserSiteIds = [];
 
+  /// 🆕 The ticket ID the user is currently viewing in the chat screen.
+  /// When a chat notification arrives for this ticket, skip it.
+  String? _currentViewingTicketId;
+
   String? get currentUserEmail => _currentUserEmail;
   String? get currentUserRole => _currentUserRole;
-  List<String> get currentUserSiteIds => List.unmodifiable(_currentUserSiteIds);
+  List<String> get currentUserSiteIds =>
+      List.unmodifiable(_currentUserSiteIds);
+  String? get currentViewingTicketId => _currentViewingTicketId;
 
   DateTime? _startedAt;
   bool _isRunning = false;
+
+  /// Called by the chat screen when it opens/closes.
+  void setViewingTicket(String? ticketId) {
+    _currentViewingTicketId = ticketId;
+    print('👁️ Notification listener: viewing ticket = ${ticketId ?? "none"}');
+  }
 
   /// Start listening. Call after successful login OR session restore.
   Future<void> start({
@@ -32,7 +44,6 @@ class AppNotificationListener {
     required List<String> userSiteIds,
   }) async {
     if (_isRunning) {
-      // Already running — just update context
       _currentUserEmail = userEmail;
       _currentUserRole = userRole;
       _currentUserSiteIds = userSiteIds;
@@ -45,11 +56,8 @@ class AppNotificationListener {
     _currentUserSiteIds = userSiteIds;
     _startedAt = DateTime.now();
 
-    // Cancel any prior subscription defensively
     await _notifSub?.cancel();
 
-    // Listen only to notifications addressed to this user.
-    // Firestore security rules enforce the read on this query.
     _notifSub = _firestore
         .collection('notifications')
         .where('user_email', isEqualTo: userEmail)
@@ -65,14 +73,12 @@ class AppNotificationListener {
   /// Stop listening. Call on every logout.
   Future<void> stop() async {
     _isRunning = false;
-
-    // Cancel subscription — prevents duplicate listeners on re-login
     await _notifSub?.cancel();
     _notifSub = null;
-
     _currentUserEmail = null;
     _currentUserRole = null;
     _currentUserSiteIds = [];
+    _currentViewingTicketId = null;
     _startedAt = null;
   }
 
@@ -104,13 +110,23 @@ class AppNotificationListener {
       final title = data['title'] ?? 'Update';
       final body = data['body'] ?? '';
       final ticketId = data['ticket_id'] ?? '';
-      final type = data['type'] ?? 'general';   // ← ADD THIS
+      final type = data['type'] ?? 'general';
+
+      // 🆕 SUPPRESS chat notifications when user is viewing that chat
+      if (type == 'chat_message' &&
+          ticketId.isNotEmpty &&
+          ticketId == _currentViewingTicketId) {
+        print(
+          '🔕 Suppressed chat notification (user is viewing $ticketId)',
+        );
+        continue;
+      }
 
       _push.showLocal(
         title: title,
         body: body,
         ticketId: ticketId,
-        type: type,   // ← PASS THIS
+        type: type,
       );
     }
   }

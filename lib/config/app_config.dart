@@ -3,7 +3,7 @@ class AppConfig {
   static const bool useFirebaseStorage = true;
 
   // Ticket form images
-  static const int maxTicketImages = 5;
+  static const int maxTicketImages = 2;
 
   // On-site completion evidence
   static const int maxCompletionImages = 3;

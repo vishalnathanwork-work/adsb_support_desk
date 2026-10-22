@@ -20,7 +20,7 @@ class BrandBackground extends StatelessWidget {
       children: [
         // Background image
         Image.asset(
-          'assets/images/background.jpeg',
+          'assets/images/background.png',
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
             decoration: const BoxDecoration(

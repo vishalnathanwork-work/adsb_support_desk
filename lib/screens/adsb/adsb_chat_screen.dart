@@ -13,6 +13,7 @@ import '../../widgets/chat_bubble.dart';
 import '../../widgets/image_gallery.dart';
 import '../../widgets/status_badge.dart';
 import '../../services/chat_presence_service.dart';
+import '../../services/notification_listener.dart';
 
 class AdsbChatScreen extends StatefulWidget {
   final String ticketId;
@@ -47,14 +48,16 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   void initState() {
     super.initState();
     _bootstrap();
-    // Mark user as viewing this chat
+    // Mark user as viewing this chat (for Cloud Function — FCM suppression)
     _presenceService.enterChat(widget.ticketId);
+    AppNotificationListener().setViewingTicket(widget.ticketId);
   }
 
   @override
   void dispose() {
     // Clear viewing state when leaving the chat
     _presenceService.exitChat();
+    AppNotificationListener().setViewingTicket(null);
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();

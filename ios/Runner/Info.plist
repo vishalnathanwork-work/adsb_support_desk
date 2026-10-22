@@ -11,7 +11,7 @@
         <string>$(DEVELOPMENT_LANGUAGE)</string>
 
         <key>CFBundleDisplayName</key>
-        <string>Access Digital Support</string>
+        <string>PARKEN ASSIST</string>
 
         <key>CFBundleExecutable</key>
         <string>$(EXECUTABLE_NAME)</string>
@@ -23,7 +23,7 @@
         <string>6.0</string>
 
         <key>CFBundleName</key>
-        <string>access_digital_support</string>
+        <string>Parken Assist</string>
 
         <key>CFBundlePackageType</key>
         <string>APPL</string>

@@ -1,7 +1,7 @@
 import '../models/user_model.dart';
 
 class AppConstants {
-  static const String appName = 'ADSB Support Desk';
+  static const String appName = 'Parken Assist';
   static const String appVersion = '1.0.0';
 
   // Mock users for testing

@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _rememberMe = false;
+  bool _rememberMe = true;
 
   @override
   void dispose() {
@@ -253,17 +253,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // ─── Version ───
-                      Center(
-                        child: Text(
-                          'Version ${AppConstants.appVersion}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),

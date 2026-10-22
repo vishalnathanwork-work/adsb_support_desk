@@ -66,11 +66,6 @@ class _TechnicianDashboardState extends State<TechnicianDashboard> {
           page: TechnicianQueueScreen(user: widget.user),
         ),
         NavTab(
-          label: 'History',
-          icon: Icons.history,
-          page: TechnicianHistoryScreen(user: widget.user),
-        ),
-        NavTab(
           label: 'Profile',
           icon: Icons.person_outline,
           page: ClientProfileTab(
@@ -173,34 +168,6 @@ class _TTAdvisorHome extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Info card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                Border.all(color: AppColors.primary.withOpacity(0.2)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Icon(Icons.info_outline,
-                      color: AppColors.primary, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'You handle Barrier, Payment Terminal, and Intercom '
-                          'products. Review escalated tickets and advise the '
-                          'ADSB team via chat.',
-                      style: TextStyle(fontSize: 12, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
             // Quick actions
             const Text('Quick Actions',
                 style: TextStyle(
@@ -216,19 +183,6 @@ class _TTAdvisorHome extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => TechnicianQueueScreen(user: user),
-                ),
-              ),
-            ),
-            _actionTile(
-              context,
-              Icons.history,
-              'My History',
-              'Tickets you previously handled',
-              AppColors.accent,
-                  () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TechnicianHistoryScreen(user: user),
                 ),
               ),
             ),

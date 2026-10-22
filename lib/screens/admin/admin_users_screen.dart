@@ -152,12 +152,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreateForm,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add User'),
-      ),
       body: Column(
         children: [
           // ─── Search ───

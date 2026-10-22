@@ -33,7 +33,7 @@ class AppLogo extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Image.asset(
-        'assets/images/logo.jpeg',
+        'assets/images/logo.jpg',
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => _fallback(context),
       ),

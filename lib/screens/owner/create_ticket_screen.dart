@@ -32,17 +32,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   String? _selectedProductType;
   String? _selectedProductIssue;
 
-  /// Selected lanes: keys are lane IDs, values are the lane data maps.
-  /// Example: {'l1': {id, name, type, zone_id, zone_name}, ...}
-  final Map<String, Map<String, String>> _selectedLanes = {};
-
-  /// Which zones are expanded (by zone ID).
-  final Set<String> _expandedZones = {};
-
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _customIssueController = TextEditingController();
 
   List<SiteModel> _sites = [];
   List<String> _productTypes = [];
@@ -53,9 +45,32 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _loading = true;
   bool _isSubmitting = false;
 
-  static const String _otherValue = 'Other (please describe)';
+  /// True when product type = "Others"
+  bool get _isOtherProductType {
+    final t = _selectedProductType;
+    if (t == null || t.isEmpty) return false;
+    final lower = t.toLowerCase();
+    return lower == 'other' ||
+        lower == 'others' ||
+        lower.startsWith('other ') ||
+        lower.startsWith('others ');
+  }
 
-  bool get _showCustomIssueField => _selectedProductIssue == _otherValue;
+  /// True when the selected issue is "Other" style
+  bool get _isOtherIssue {
+    final issue = _selectedProductIssue;
+    if (issue == null || issue.isEmpty) return false;
+    final lower = issue.toLowerCase();
+    return lower == 'other' ||
+        lower == 'others' ||
+        lower.startsWith('other ') ||
+        lower.startsWith('others ') ||
+        lower.startsWith('other(') ||
+        lower.startsWith('others(');
+  }
+
+  /// Description is required when product type OR issue is "Other"
+  bool get _requiresDescription => _isOtherProductType || _isOtherIssue;
 
   @override
   void initState() {
@@ -70,7 +85,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     _contactNameController.dispose();
     _contactPhoneController.dispose();
     _descriptionController.dispose();
-    _customIssueController.dispose();
     super.dispose();
   }
 
@@ -87,58 +101,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       _productTypes = types;
       _productIssuesMap = issuesMap;
       _loading = false;
-    });
-  }
-
-  // ─────────────────────────────────────────
-  // LANE SELECTION
-  // ─────────────────────────────────────────
-
-  void _toggleZoneExpanded(String zoneId) {
-    setState(() {
-      if (_expandedZones.contains(zoneId)) {
-        _expandedZones.remove(zoneId);
-      } else {
-        _expandedZones.add(zoneId);
-      }
-    });
-  }
-
-  void _toggleLane(Zone zone, Lane lane) {
-    setState(() {
-      if (_selectedLanes.containsKey(lane.id)) {
-        _selectedLanes.remove(lane.id);
-      } else {
-        _selectedLanes[lane.id] = {
-          'id': lane.id,
-          'name': lane.name,
-          'type': lane.type,
-          'zone_id': zone.id,
-          'zone_name': zone.name,
-        };
-      }
-    });
-  }
-
-  void _selectAllInZone(Zone zone) {
-    setState(() {
-      for (final lane in zone.lanes) {
-        _selectedLanes[lane.id] = {
-          'id': lane.id,
-          'name': lane.name,
-          'type': lane.type,
-          'zone_id': zone.id,
-          'zone_name': zone.name,
-        };
-      }
-    });
-  }
-
-  void _clearZone(Zone zone) {
-    setState(() {
-      for (final lane in zone.lanes) {
-        _selectedLanes.remove(lane.id);
-      }
     });
   }
 
@@ -223,40 +185,60 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   // ─────────────────────────────────────────
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
+    // Manual validations first (snackbar errors)
     if (_selectedSite == null) {
       _showError('Please select a site location');
-      return;
-    }
-    if (_selectedLanes.isEmpty) {
-      _showError('Please select at least one lane');
       return;
     }
     if (_selectedProductType == null) {
       _showError('Please select a product type');
       return;
     }
-    if (_selectedProductIssue == null) {
-      _showError('Please select an issue');
+
+    // Issue dropdown validation (hidden when product type = "Others")
+    if (!_isOtherProductType) {
+      if (_selectedProductIssue == null) {
+        _showError('Please select an issue');
+        return;
+      }
+    }
+
+    // Description required when "Other" in either product type or issue
+    if (_requiresDescription &&
+        _descriptionController.text.trim().isEmpty) {
+      _showError(
+        'Please describe the issue in the description field '
+            '(required when "Other" is selected)',
+      );
       return;
     }
-    if (_showCustomIssueField &&
-        _customIssueController.text.trim().isEmpty) {
-      _showError('Please describe the issue');
-      return;
-    }
+
+    // Form-level validate (phone, name, etc.)
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
 
-    final finalIssue = _showCustomIssueField
-        ? _customIssueController.text.trim()
-        : _selectedProductIssue!;
+    // Build the final issue text
+    final String finalIssue;
+    if (_isOtherProductType) {
+      // Product type = Others → description becomes the issue
+      finalIssue = _descriptionController.text.trim();
+    } else if (_isOtherIssue) {
+      // Issue = Other → description becomes the issue
+      finalIssue = _descriptionController.text.trim();
+    } else {
+      // Normal issue
+      finalIssue = _selectedProductIssue!;
+    }
 
-    // Build lanes list in a stable order (grouped by zone, then by lane order)
-    final lanesList = _selectedLanes.values.toList();
+    // Description — only save when NOT used as the issue text
+    final String finalDescription;
+    if (_isOtherProductType || _isOtherIssue) {
+      finalDescription = '';
+    } else {
+      finalDescription = _descriptionController.text.trim();
+    }
 
-    // 1. Create the ticket
     final ticket = await _ticketService.createTicket(
       createdBy: widget.user.email,
       createdByName: widget.user.name,
@@ -264,12 +246,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       siteId: _selectedSite!.id,
       siteName: _selectedSite!.name,
       siteLocation: _selectedSite!.address,
-      lanes: lanesList,
+      lanes: const [],
       productType: _selectedProductType!,
       productIssue: finalIssue,
       contactName: _contactNameController.text.trim(),
       contactPhone: _contactPhoneController.text.trim(),
-      description: _descriptionController.text.trim(),
+      description: finalDescription,
       imageUrls: const [],
     );
 
@@ -280,7 +262,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
 
-    // 2. Upload images
+    // Upload images
     if (_selectedImages.isNotEmpty) {
       final urls = await _imageService.uploadImages(
         files: _selectedImages,
@@ -386,17 +368,14 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             children: [
               _sectionTitle('Location'),
               _buildSiteDropdown(),
-              const SizedBox(height: 16),
-              _buildLaneSection(),
               const SizedBox(height: 20),
 
               _sectionTitle('Product Details'),
               _buildProductTypeDropdown(),
-              const SizedBox(height: 12),
-              _buildProductIssueDropdown(),
-              if (_showCustomIssueField) ...[
+              // Hide issue dropdown when product type = "Others"
+              if (!_isOtherProductType) ...[
                 const SizedBox(height: 12),
-                _buildCustomIssueField(),
+                _buildProductIssueDropdown(),
               ],
               const SizedBox(height: 20),
 
@@ -423,7 +402,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               ),
               const SizedBox(height: 20),
 
-              _sectionTitle('Issue Description (Optional)'),
+              _sectionTitle(
+                _requiresDescription
+                    ? 'Issue Description (Required)'
+                    : 'Issue Description (Optional)',
+              ),
               _buildTextArea(),
               const SizedBox(height: 32),
 
@@ -485,12 +468,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         if (id == null) return;
         setState(() {
           _selectedSite = _sites.firstWhere((s) => s.id == id);
-          _selectedLanes.clear();
-          _expandedZones.clear();
-          // Auto-expand the first zone if any
-          if (_selectedSite!.zones.isNotEmpty) {
-            _expandedZones.add(_selectedSite!.zones.first.id);
-          }
         });
       },
       validator: (v) => v == null ? 'Required' : null,
@@ -498,426 +475,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   // ═══════════════════════════════════════════════
-  // LANE SECTION (zone-grouped, expandable, multi-select)
-  // ═══════════════════════════════════════════════
-
-  Widget _buildLaneSection() {
-    if (_selectedSite == null) {
-      return _disabledHint('Select a site first');
-    }
-
-    if (_selectedSite!.zones.isEmpty) {
-      return _emptyMessage(
-        'This site has no zones configured. Contact admin.',
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text(
-              'Which points are affected?',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const Spacer(),
-            if (_selectedLanes.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${_selectedLanes.length} selected',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Tap a zone to expand and select entry/exit points',
-          style: TextStyle(
-            fontSize: 11,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // Zones list
-        ..._selectedSite!.zones.map((zone) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _buildZoneTile(zone),
-          );
-        }),
-
-        // Selected summary
-        if (_selectedLanes.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _buildSelectedSummary(),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildZoneTile(Zone zone) {
-    final isExpanded = _expandedZones.contains(zone.id);
-    final selectedInZone = zone.lanes
-        .where((l) => _selectedLanes.containsKey(l.id))
-        .length;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selectedInZone > 0
-              ? AppColors.primary.withOpacity(0.5)
-              : AppColors.divider,
-          width: selectedInZone > 0 ? 2 : 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          // Zone header (tappable to expand/collapse)
-          InkWell(
-            onTap: () => _toggleZoneExpanded(zone.id),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.local_parking,
-                      size: 18,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          zone.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          zone.lanesSummary,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (selectedInZone > 0)
-                    Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '$selectedInZone',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.success,
-                        ),
-                      ),
-                    ),
-                  Icon(
-                    isExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Expanded content
-          if (isExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Divider(height: 1),
-                  const SizedBox(height: 10),
-
-                  // Quick actions
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => _selectAllInZone(zone),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8),
-                          minimumSize: const Size(0, 30),
-                        ),
-                        child: const Text(
-                          'Select all',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => _clearZone(zone),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8),
-                          minimumSize: const Size(0, 30),
-                        ),
-                        child: const Text(
-                          'Clear',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Lane checkboxes
-                  ...zone.lanes.map((lane) {
-                    final selected =
-                    _selectedLanes.containsKey(lane.id);
-                    final isEntry = lane.isEntry;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: InkWell(
-                        onTap: () => _toggleLane(zone, lane),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.primary.withOpacity(0.06)
-                                : AppColors.background,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selected
-                                  ? AppColors.primary
-                                  : AppColors.divider,
-                              width: selected ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                selected
-                                    ? Icons.check_circle
-                                    : Icons.circle_outlined,
-                                size: 20,
-                                color: selected
-                                    ? AppColors.primary
-                                    : AppColors.textTertiary,
-                              ),
-                              const SizedBox(width: 10),
-                              Icon(
-                                isEntry
-                                    ? Icons.login
-                                    : Icons.logout,
-                                size: 16,
-                                color: isEntry
-                                    ? AppColors.success
-                                    : AppColors.warning,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  lane.name,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: selected
-                                        ? AppColors.primary
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isEntry
-                                      ? AppColors.success
-                                      .withOpacity(0.12)
-                                      : AppColors.warning
-                                      .withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  lane.directionLabel,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: isEntry
-                                        ? AppColors.success
-                                        : AppColors.warning,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSelectedSummary() {
-    // Group by zone
-    final byZone = <String, List<Map<String, String>>>{};
-    for (final lane in _selectedLanes.values) {
-      final zoneName = lane['zone_name'] ?? 'Unassigned';
-      byZone.putIfAbsent(zoneName, () => []).add(lane);
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.primary.withOpacity(0.25),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.check_circle_outline,
-                  size: 14, color: AppColors.primary),
-              SizedBox(width: 6),
-              Text(
-                'SELECTED',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...byZone.entries.map((entry) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '📍 ${entry.key}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 5,
-                    runSpacing: 5,
-                    children: entry.value.map((lane) {
-                      final isEntry = lane['type'] == 'entry';
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isEntry
-                                ? AppColors.success.withOpacity(0.4)
-                                : AppColors.warning.withOpacity(0.4),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isEntry ? Icons.login : Icons.logout,
-                              size: 10,
-                              color: isEntry
-                                  ? AppColors.success
-                                  : AppColors.warning,
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              lane['name'] ?? '',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: isEntry
-                                    ? AppColors.success
-                                    : AppColors.warning,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════
-  // PRODUCT / ISSUE
+  // PRODUCT TYPE DROPDOWN
   // ═══════════════════════════════════════════════
 
   Widget _buildProductTypeDropdown() {
@@ -945,7 +503,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         setState(() {
           _selectedProductType = v;
           _selectedProductIssue = null;
-          _customIssueController.clear();
         });
       },
       validator: (v) => v == null ? 'Required' : null,
@@ -983,61 +540,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       onChanged: (v) {
         setState(() {
           _selectedProductIssue = v;
-          if (v != _otherValue) {
-            _customIssueController.clear();
-          }
         });
       },
       validator: (v) => v == null ? 'Required' : null,
-    );
-  }
-
-  Widget _buildCustomIssueField() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.warning.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.edit_note, size: 16, color: AppColors.warning),
-              SizedBox(width: 6),
-              Text(
-                'Describe the issue',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.warning,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _customIssueController,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText:
-              'Type the specific issue you are experiencing...',
-              fillColor: Colors.white,
-            ),
-            validator: (v) {
-              if (_showCustomIssueField &&
-                  (v == null || v.trim().isEmpty)) {
-                return 'Please describe the issue';
-              }
-              return null;
-            },
-          ),
-        ],
-      ),
     );
   }
 
@@ -1226,9 +731,18 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     return TextFormField(
       controller: _descriptionController,
       maxLines: 4,
-      decoration: const InputDecoration(
-        hintText: 'Describe the issue in detail (optional)',
+      decoration: InputDecoration(
+        hintText: _requiresDescription
+            ? 'Describe the issue in detail — required'
+            : 'Describe the issue in detail (optional)',
       ),
+      validator: (v) {
+        if (_requiresDescription &&
+            (v == null || v.trim().isEmpty)) {
+          return 'Please describe the issue';
+        }
+        return null;
+      },
     );
   }
 }
