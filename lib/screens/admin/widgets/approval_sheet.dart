@@ -30,6 +30,9 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
   ClientModel? _selectedClient;
   Set<String> _selectedSiteIds = {};
 
+  // ─── Role selection ───
+  String _selectedRole = 'owner';
+
   bool _loading = true;
   bool _loadingSites = false;
   bool _saving = false;
@@ -38,16 +41,10 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
   String get _uid => widget.userData['uid'] as String;
   String get _name => widget.userData['name'] ?? '—';
   String get _email => widget.userData['email'] ?? '—';
-  String get _role => widget.userData['role'] ?? 'owner';
-  List<String> get _requestedSiteIds {
-    final v = widget.userData['site_ids'];
-    if (v == null) return [];
-    if (v is List) return v.map((e) => e.toString()).toList();
-    if (v is String) return v.isEmpty ? [] : [v];
-    return [];
-  }
-
-  bool get _isOwner => _role == 'owner';
+  String get _username => (widget.userData['username'] ?? '').toString();
+  String get _phone => widget.userData['phone'] ?? '—';
+  String get _remark =>
+      widget.userData['remark'] ?? widget.userData['company'] ?? '—';
 
   @override
   void initState() {
@@ -57,34 +54,12 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
 
   Future<void> _bootstrap() async {
     setState(() => _loading = true);
-
     final clients = await _clientService.getAllClients();
-
-    // Try to pre-select client based on the user's requested site
-    ClientModel? preSelected;
-    if (_requestedSiteIds.isNotEmpty) {
-      final firstSite = await _siteService.getSiteById(_requestedSiteIds.first);
-      if (firstSite != null) {
-        for (final c in clients) {
-          if (c.id == firstSite.clientId) {
-            preSelected = c;
-            break;
-          }
-        }
-      }
-    }
-
     if (!mounted) return;
     setState(() {
       _allClients = clients;
-      _selectedClient = preSelected;
-      _selectedSiteIds = _requestedSiteIds.toSet();
       _loading = false;
     });
-
-    if (preSelected != null) {
-      await _loadSitesFor(preSelected.id);
-    }
   }
 
   Future<void> _loadSitesFor(String clientId) async {
@@ -92,9 +67,7 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
       _loadingSites = true;
       _clientSites = [];
     });
-
     final sites = await _siteService.getSitesByClientId(clientId);
-
     if (!mounted) return;
     setState(() {
       _clientSites = sites;
@@ -102,9 +75,16 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
     });
   }
 
-  // ─────────────────────────────────────────────
-  // ACTIONS
-  // ─────────────────────────────────────────────
+  // ─── When role changes, adjust site selection ───
+  void _setRole(String role) {
+    setState(() {
+      _selectedRole = role;
+      // Operator can only have 1 site — trim if switching from owner
+      if (role == 'operator' && _selectedSiteIds.length > 1) {
+        _selectedSiteIds = {_selectedSiteIds.first};
+      }
+    });
+  }
 
   Future<void> _approve() async {
     if (_selectedClient == null) {
@@ -115,7 +95,7 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
       _snack('Please assign at least one site', AppColors.error);
       return;
     }
-    if (!_isOwner && _selectedSiteIds.length != 1) {
+    if (_selectedRole == 'operator' && _selectedSiteIds.length != 1) {
       _snack('Operator can only have one site', AppColors.error);
       return;
     }
@@ -128,13 +108,18 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
       clientName: _selectedClient!.name,
       siteIds: _selectedSiteIds.toList(),
       adminEmail: widget.adminEmail,
+      role: _selectedRole,   // ← pass selected role
     );
 
     if (!mounted) return;
     setState(() => _saving = false);
 
     if (ok) {
-      _snack('User approved', AppColors.success);
+      _snack(
+        'User approved as '
+            '${_selectedRole == 'owner' ? 'Site Owner' : 'Site Operator'}',
+        AppColors.success,
+      );
       Navigator.pop(context, 'approved');
     } else {
       _snack('Approval failed', AppColors.error);
@@ -145,10 +130,12 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Reject this user?'),
+        title: const Text('Reject and delete?'),
         content: Text(
-          '$_name will be removed from the system. '
-              'They will not be able to log in.',
+          '$_name will be permanently deleted. '
+              'Their login account will also be removed.\n\n'
+              'If they were registered by mistake, they can sign up again '
+              'with the same username.',
         ),
         actions: [
           TextButton(
@@ -158,7 +145,7 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Reject'),
+            child: const Text('Reject & Delete'),
           ),
         ],
       ),
@@ -167,14 +154,15 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
     if (confirm != true) return;
 
     setState(() => _rejecting = true);
-
     final ok = await _userService.rejectUser(_uid);
-
     if (!mounted) return;
     setState(() => _rejecting = false);
 
     if (ok) {
-      _snack('User rejected', AppColors.warning);
+      _snack(
+        'User rejected and deleted. They can register again.',
+        AppColors.warning,
+      );
       Navigator.pop(context, 'rejected');
     } else {
       _snack('Reject failed', AppColors.error);
@@ -186,10 +174,6 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
       SnackBar(content: Text(msg), backgroundColor: color),
     );
   }
-
-  // ─────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -225,12 +209,55 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
             ),
             const SizedBox(height: 16),
 
-            // User info card
-            _userCard(),
+            // ─── User info card ───
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                children: [
+                  _infoRow('Name', _name),
+                  _infoRow('Username', _username.isEmpty ? '—' : _username),
+                  _infoRow('Phone', _phone),
+                  _infoRow('Company (remark)', _remark),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 20),
 
-            // Client picker
-            _label('Client (Company)'),
+            // ═══ ROLE SELECTION ═══
+            _label('Assign Role'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _roleCard(
+                    role: 'owner',
+                    title: 'Site Owner',
+                    subtitle: 'Multi-site access',
+                    icon: Icons.business_outlined,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _roleCard(
+                    role: 'operator',
+                    title: 'Site Operator',
+                    subtitle: 'One site only',
+                    icon: Icons.badge_outlined,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // ─── Client picker ───
+            _label('Assign to Client (Company)'),
             DropdownButtonFormField<String>(
               initialValue: _selectedClient?.id,
               isExpanded: true,
@@ -260,17 +287,19 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Site picker
+            // ─── Site picker ───
             if (_selectedClient != null) ...[
-              _label(_isOwner
-                  ? 'Assign Sites (multi)'
-                  : 'Assign Site (exactly 1)'),
+              _label(
+                _selectedRole == 'owner'
+                    ? 'Assign Sites (multi)'
+                    : 'Assign Site (exactly 1)',
+              ),
               _buildSiteSelector(),
             ],
 
             const SizedBox(height: 24),
 
-            // Actions
+            // ─── Actions ───
             Row(
               children: [
                 Expanded(
@@ -285,8 +314,11 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
                         color: AppColors.error,
                       ),
                     )
-                        : const Icon(Icons.close,
-                        size: 18, color: AppColors.error),
+                        : const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: AppColors.error,
+                    ),
                     label: const Text(
                       'Reject',
                       style: TextStyle(color: AppColors.error),
@@ -317,9 +349,9 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
                       ),
                     )
                         : const Icon(Icons.check, size: 18),
-                    label: const Text(
-                      'Approve',
-                      style: TextStyle(
+                    label: Text(
+                      'Approve as ${_selectedRole == 'owner' ? 'Owner' : 'Operator'}',
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -343,6 +375,76 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
     );
   }
 
+  // ═══════════════════════════════════════════════
+  // ROLE CARD
+  // ═══════════════════════════════════════════════
+
+  Widget _roleCard({
+    required String role,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final selected = _selectedRole == role;
+
+    return InkWell(
+      onTap: () => _setRole(role),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withOpacity(0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.divider,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? AppColors.primary : AppColors.textSecondary,
+                ),
+                const Spacer(),
+                if (selected)
+                  const Icon(
+                    Icons.check_circle,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? AppColors.primary
+                    : AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _handle() => Center(
     child: Container(
       width: 40,
@@ -353,30 +455,6 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
       ),
     ),
   );
-
-  Widget _userCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          _infoRow('Name', _name),
-          _infoRow('Email', _email),
-          _infoRow('Role', _isOwner ? 'Site Owner' : 'Site Operator'),
-          _infoRow(
-            'Requested',
-            _requestedSiteIds.isEmpty
-                ? 'No sites specified'
-                : '${_requestedSiteIds.length} site(s)',
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSiteSelector() {
     if (_loadingSites) {
@@ -420,8 +498,7 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
         children: _clientSites.map((site) {
           final selected = _selectedSiteIds.contains(site.id);
 
-          if (!_isOwner) {
-            // Operator — radio
+          if (_selectedRole == 'operator') {
             return RadioListTile<String>(
               value: site.id,
               groupValue: _selectedSiteIds.isEmpty
@@ -448,7 +525,6 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
             );
           }
 
-          // Owner — checkbox
           return CheckboxListTile(
             value: selected,
             onChanged: (v) {
@@ -486,7 +562,7 @@ class _ApprovalSheetState extends State<ApprovalSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
+            width: 120,
             child: Text(
               label,
               style: const TextStyle(

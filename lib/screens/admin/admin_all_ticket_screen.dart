@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -15,7 +16,8 @@ class AdminAllTicketsScreen extends StatefulWidget {
   const AdminAllTicketsScreen({super.key, required this.user});
 
   @override
-  State<AdminAllTicketsScreen> createState() => _AdminAllTicketsScreenState();
+  State<AdminAllTicketsScreen> createState() =>
+      _AdminAllTicketsScreenState();
 }
 
 class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
@@ -30,6 +32,12 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -47,7 +55,8 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
   void _applyFilter() {
     final q = _searchController.text.trim().toLowerCase();
     _filtered = _all.where((t) {
-      final statusMatch = _filterStatus == 'all' || t.status == _filterStatus;
+      final statusMatch =
+          _filterStatus == 'all' || t.status == _filterStatus;
       final searchMatch = q.isEmpty ||
           t.id.toLowerCase().contains(q) ||
           t.productType.toLowerCase().contains(q) ||
@@ -58,9 +67,11 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Tickets'),
+        title: Text(t.adminAllTicketsTitle),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -75,9 +86,9 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                 TextField(
                   controller: _searchController,
                   onChanged: (_) => setState(_applyFilter),
-                  decoration: const InputDecoration(
-                    hintText: 'Search by ID, product, or owner...',
-                    prefixIcon: Icon(Icons.search),
+                  decoration: InputDecoration(
+                    hintText: t.searchHint,
+                    prefixIcon: const Icon(Icons.search),
                     filled: true,
                   ),
                 ),
@@ -90,15 +101,33 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                       _applyFilter();
                     });
                   },
-                  options: const [
-                    FilterOption(label: 'All', value: 'all'),
-                    FilterOption(label: 'Pending', value: 'pending'),
-                    FilterOption(label: 'Verified', value: 'verified'),
-                    FilterOption(label: 'On-Site', value: 'pending_onsite'),
-                    FilterOption(label: 'In Progress', value: 'in_progress'),
-                    FilterOption(label: 'Resolved', value: 'resolved'),
-                    FilterOption(label: 'Closed', value: 'closed'),
-                    FilterOption(label: 'Cancelled', value: 'cancelled'),
+                  options: [
+                    FilterOption(
+                      label: t.notificationsTabAll,
+                      value: 'all',
+                    ),
+                    FilterOption(label: t.pending, value: 'pending'),
+                    FilterOption(
+                      label: t.statusVerifiedLabel,
+                      value: 'verified',
+                    ),
+                    FilterOption(
+                      label: t.onSiteQueued,
+                      value: 'pending_onsite',
+                    ),
+                    FilterOption(
+                      label: t.statusInProgressLabel,
+                      value: 'in_progress',
+                    ),
+                    FilterOption(label: t.resolved, value: 'resolved'),
+                    FilterOption(
+                      label: t.statusClosedLabel,
+                      value: 'closed',
+                    ),
+                    FilterOption(
+                      label: t.statusCancelledLabel,
+                      value: 'cancelled',
+                    ),
                   ],
                 ),
               ],
@@ -108,10 +137,10 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filtered.isEmpty
-                ? const EmptyState(
+                ? EmptyState(
               icon: Icons.search_off,
-              title: 'No tickets found',
-              subtitle: 'Try changing your filters',
+              title: t.ttNoTickets,
+              subtitle: t.ttTryChangeFilter,
             )
                 : RefreshIndicator(
               onRefresh: _load,
@@ -119,29 +148,33 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                 padding: const EdgeInsets.all(16),
                 itemCount: _filtered.length,
                 itemBuilder: (context, i) {
-                  final t = _filtered[i];
+                  final ticket = _filtered[i];
                   return InkWell(
                     onTap: () async {
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => AdminTicketControlScreen(
-                            ticketId: t.id,
-                            admin: widget.user,
-                          ),
+                          builder: (_) =>
+                              AdminTicketControlScreen(
+                                ticketId: ticket.id,
+                                admin: widget.user,
+                              ),
                         ),
                       );
                       _load();
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
+                      margin:
+                      const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border:
-                        Border.all(color: AppColors.divider),
+                        borderRadius:
+                        BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.divider,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment:
@@ -150,42 +183,61 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
                           Row(
                             children: [
                               Expanded(
-                                child: Text(t.id,
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary)),
+                                child: Text(
+                                  ticket.id,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight:
+                                    FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
                               ),
-                              StatusBadge(status: t.status),
+                              StatusBadge(
+                                status: ticket.status,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 6),
-                          Text(t.productType,
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600)),
-                          Text(t.productIssue,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary)),
+                          Text(
+                            ticket.productType,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            ticket.productIssue,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color:
+                              AppColors.textSecondary,
+                            ),
+                          ),
                           const SizedBox(height: 8),
 
-                          if (t.totalResolutionTime != null)
+                          if (ticket.totalResolutionTime !=
+                              null)
                             Padding(
-                              padding: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                              ),
                               child: Row(
                                 children: [
                                   const Icon(
                                     Icons.timer_outlined,
                                     size: 12,
-                                    color: AppColors.textSecondary,
+                                    color: AppColors
+                                        .textSecondary,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    'Resolved in ${Ticket.formatDuration(t.totalResolutionTime)}',
+                                    '${t.adminReportedLabel}: '
+                                        '${Ticket.formatDuration(ticket.totalResolutionTime)}',
                                     style: const TextStyle(
                                       fontSize: 11,
-                                      color: AppColors.textSecondary,
+                                      color: AppColors
+                                          .textSecondary,
                                     ),
                                   ),
                                 ],
@@ -195,24 +247,33 @@ class _AdminAllTicketsScreenState extends State<AdminAllTicketsScreen> {
 
                           Row(
                             children: [
-                              const Icon(Icons.person_outline,
-                                  size: 12,
-                                  color: AppColors.textSecondary),
+                              const Icon(
+                                Icons.person_outline,
+                                size: 12,
+                                color: AppColors
+                                    .textSecondary,
+                              ),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  '${t.createdByName} (${t.createdByRole})',
+                                  '${ticket.createdByName} (${ticket.createdByRoleLabel})',
                                   style: const TextStyle(
-                                      fontSize: 11,
-                                      color:
-                                      AppColors.textSecondary),
+                                    fontSize: 11,
+                                    color: AppColors
+                                        .textSecondary,
+                                  ),
                                 ),
                               ),
-                              Text(DateFormatter.relative(t.createdAt),
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color:
-                                      AppColors.textSecondary)),
+                              Text(
+                                DateFormatter.relative(
+                                  ticket.createdAt,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors
+                                      .textSecondary,
+                                ),
+                              ),
                             ],
                           ),
                         ],

@@ -1,13 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/role_router.dart';
 import '../../widgets/app_logo.dart';
-import '../../widgets/brand_background.dart';
 
 class PendingApprovalScreen extends StatefulWidget {
   final UserModel user;
@@ -23,13 +23,14 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   bool _isLoggingOut = false;
 
   Future<void> _checkStatus() async {
+    final t = AppLocalizations.of(context)!;
     setState(() => _isChecking = true);
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       if (!mounted) return;
       setState(() => _isChecking = false);
-      _snack('Please log out and log back in.', AppColors.info);
+      _snack(t.pleaseLogoutLogin, AppColors.info);
       return;
     }
 
@@ -39,28 +40,43 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     setState(() => _isChecking = false);
 
     if (data == null) {
-      _snack('Account not found. Contact admin.', AppColors.error);
+      _snack(t.accountNotFound, AppColors.error);
       return;
     }
 
     final isActive = data['is_active'] == true;
-    final status = data['approval_status'] ?? 'pending';
+    final status =
+    (data['approval_status'] ?? '').toString().toLowerCase();
 
-    if (isActive && status == 'approved') {
+    if (status == 'approved' && isActive) {
       final updatedUser = UserModel.fromJson({
         ...data,
         'email': data['email'] ?? widget.user.email,
       });
 
       if (!mounted) return;
-      _snack('Approved! Welcome aboard.', AppColors.success);
+      _snack(t.approvedWelcome, AppColors.success);
       RoleRouter.goToDashboard(context, updatedUser, replace: true);
-    } else {
+      return;
+    }
+
+    if (status == 'rejected') {
       _snack(
-        'Still pending. Please wait for admin approval.',
+        'Your registration was rejected. Contact ADSB support.',
+        AppColors.error,
+      );
+      return;
+    }
+
+    if (status == 'approved' && !isActive) {
+      _snack(
+        'Your account is being activated. Please try again shortly.',
         AppColors.info,
       );
+      return;
     }
+
+    _snack(t.stillPending, AppColors.info);
   }
 
   Future<void> _logout() async {
@@ -79,168 +95,199 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final u = widget.user;
 
     return Scaffold(
-      body: BrandBackground(
-        overlayOpacity: 0.55,
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
+      backgroundColor: Colors.transparent,   // ⭐ see global image
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
               padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadii.xl),
-                  boxShadow: AppShadows.large,
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight:
+                  constraints.maxHeight - (AppSpacing.xl * 2),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Center(child: AppLogo(size: 64)),
-                    const SizedBox(height: 20),
-
-                    // Status icon
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.hourglass_top_rounded,
-                        size: 36,
-                        color: AppColors.warning,
-                      ),
+                child: Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                      BorderRadius.circular(AppRadii.xl),
+                      boxShadow: AppShadows.large,
                     ),
-                    const SizedBox(height: 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
+                      children: [
+                        const Center(child: AppLogo(size: 64)),
+                        const SizedBox(height: 20),
 
-                    const Text(
-                      'Waiting for Approval',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Your registration has been submitted. '
-                          'An ADSB administrator will review and approve '
-                          'your account shortly.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Status summary card
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: Column(
-                        children: [
-                          _row('Name', u.name),
-                          _row('Email', u.email),
-                          _row('Role', u.roleDisplayName),
-                          if (u.clientName != null)
-                            _row('Client', u.clientName!),
-                          _row(
-                            'Sites',
-                            u.siteIds.length == 1
-                                ? '1 site'
-                                : '${u.siteIds.length} sites',
+                        Center(
+                          child: Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: AppColors.warning
+                                  .withOpacity(0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.hourglass_top_rounded,
+                              size: 36,
+                              color: AppColors.warning,
+                            ),
                           ),
-                          Row(
+                        ),
+                        const SizedBox(height: 20),
+
+                        Text(
+                          t.waitingForApproval,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          t.waitingApprovalMessage,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius:
+                            BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppColors.divider),
+                          ),
+                          child: Column(
                             children: [
-                              const SizedBox(
-                                width: 90,
-                                child: Text(
-                                  'Status',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
+                              _row(t.nameLabel, u.name),
+                              _row(
+                                'Username',
+                                u.username.isNotEmpty
+                                    ? u.username
+                                    : AuthService.emailToUsername(
+                                    u.email),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.warning.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'PENDING',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.warning,
-                                    letterSpacing: 0.5,
+                              _row(t.phoneNumber, u.phone ?? '—'),
+                              if (u.remark != null &&
+                                  u.remark!.isNotEmpty)
+                                _row('Company (remark)', u.remark!),
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 90,
+                                    child: Text(
+                                      t.statusLabel,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors
+                                            .textSecondary,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  Container(
+                                    padding:
+                                    const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning
+                                          .withOpacity(0.15),
+                                      borderRadius:
+                                      BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      t.statusPending,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.warning,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                        ),
+                        const SizedBox(height: 24),
 
-                    // Actions
-                    SizedBox(
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed: _isChecking ? null : _checkStatus,
-                        icon: _isChecking
-                            ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2),
-                        )
-                            : const Icon(Icons.refresh, size: 18),
-                        label: const Text('Refresh Status'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed:
+                            _isChecking ? null : _checkStatus,
+                            icon: _isChecking
+                                ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child:
+                              CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : const Icon(Icons.refresh,
+                                size: 18),
+                            label: Text(t.refreshStatus),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                BorderRadius.circular(12),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 48,
-                      child: TextButton.icon(
-                        onPressed: _isLoggingOut ? null : _logout,
-                        icon: const Icon(Icons.logout,
-                            size: 18, color: AppColors.error),
-                        label: const Text(
-                          'Log Out',
-                          style: TextStyle(color: AppColors.error),
+                        const SizedBox(height: 10),
+
+                        SizedBox(
+                          height: 48,
+                          child: TextButton.icon(
+                            onPressed:
+                            _isLoggingOut ? null : _logout,
+                            icon: const Icon(
+                              Icons.logout,
+                              size: 18,
+                              color: AppColors.error,
+                            ),
+                            label: Text(
+                              t.logOut,
+                              style: const TextStyle(
+                                  color: AppColors.error),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
+import '../../models/site_model.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
+import '../../services/site_service.dart';
 import '../../services/ticket_service.dart';
 import '../common/ticket_history_screen.dart';
+import '../main_navigation.dart';
 import '../owner/create_ticket_screen.dart';
 import '../owner/owner_profile_tab.dart';
 import '../owner/owner_tickets_tab.dart';
 import '../owner/notifications_screen.dart';
-import '../main_navigation.dart';
 
 class OperatorDashboard extends StatefulWidget {
   final UserModel user;
@@ -36,7 +39,8 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
 
     List siteTickets = [];
     if (widget.user.siteIds.isNotEmpty) {
-      siteTickets = await service.getActiveTicketsForSites(widget.user.siteIds);
+      siteTickets =
+      await service.getActiveTicketsForSites(widget.user.siteIds);
     }
 
     final allTickets = widget.user.siteIds.isNotEmpty
@@ -70,11 +74,13 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return MainNavigation(
       user: widget.user,
       tabs: [
         NavTab(
-          label: 'Home',
+          label: t.tabHome,
           icon: Icons.home_outlined,
           page: _OperatorHome(
             user: widget.user,
@@ -86,26 +92,27 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           ),
         ),
         NavTab(
-          label: 'Tickets',
+          label: t.tabTickets,
           icon: Icons.confirmation_number_outlined,
           page: OwnerTicketsTab(user: widget.user),
         ),
         NavTab(
-          label: 'Alerts',
+          label: t.tabAlerts,
           icon: Icons.notifications_outlined,
           page: NotificationsScreen(user: widget.user),
         ),
         NavTab(
-          label: 'History',
+          label: t.tabHistory,
           icon: Icons.history,
           page: TicketHistoryScreen(
             user: widget.user,
-            title: 'Ticket History',
-            loader: () => TicketService().getHistoryForSites(widget.user.siteIds),
+            title: t.tabHistory,
+            loader: () =>
+                TicketService().getHistoryForSites(widget.user.siteIds),
           ),
         ),
         NavTab(
-          label: 'Profile',
+          label: t.tabProfile,
           icon: Icons.person_outline,
           page: OwnerProfileTab(
             user: widget.user,
@@ -124,7 +131,11 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
   }
 }
 
-class _OperatorHome extends StatelessWidget {
+// ═══════════════════════════════════════════════
+// OPERATOR HOME (with site card)
+// ═══════════════════════════════════════════════
+
+class _OperatorHome extends StatefulWidget {
   final UserModel user;
   final int activeCount;
   final int pendingCount;
@@ -142,28 +153,66 @@ class _OperatorHome extends StatelessWidget {
   });
 
   @override
+  State<_OperatorHome> createState() => _OperatorHomeState();
+}
+
+class _OperatorHomeState extends State<_OperatorHome> {
+  final _siteService = SiteService();
+
+  SiteModel? _mySite;
+  bool _loadingSite = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMySite();
+  }
+
+  Future<void> _loadMySite() async {
+    if (widget.user.siteIds.isEmpty) {
+      setState(() => _loadingSite = false);
+      return;
+    }
+
+    final site = await _siteService.getSiteById(widget.user.siteIds.first);
+    if (!mounted) return;
+    setState(() {
+      _mySite = site;
+      _loadingSite = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Operator'),
+        title: Text(t.operatorTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: onRefresh,
+            onPressed: () {
+              widget.onRefresh();
+              _loadMySite();
+            },
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: onLogout,
+            onPressed: widget.onLogout,
           ),
         ],
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => onRefresh(),
+          onRefresh: () async {
+            widget.onRefresh();
+            await _loadMySite();
+          },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // ─── Welcome card ───
+              // ═══ Welcome card ═══
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -177,26 +226,26 @@ class _OperatorHome extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Welcome back,',
-                      style: TextStyle(
+                    Text(
+                      '${t.welcomeBack},',
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 13,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      user.name,
+                      widget.user.name,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if ((user.company ?? '').isNotEmpty) ...[
+                    if ((widget.user.company ?? '').isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(
-                        user.company!,
+                        widget.user.company!,
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -206,13 +255,175 @@ class _OperatorHome extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
 
-              const SizedBox(height: 24),
+              // ═══ MY SITE CARD ═══
+              if (!_loadingSite && _mySite != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.divider),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.location_on,
+                              color: AppColors.primary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'YOUR ASSIGNED SITE',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _mySite!.name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: Icon(
+                              Icons.map_outlined,
+                              size: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _mySite!.address,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_mySite!.zones.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.local_parking_outlined,
+                              size: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_mySite!.zoneCount} zone${_mySite!.zoneCount == 1 ? "" : "s"} · '
+                                  '${_mySite!.totalEntries} entry · '
+                                  '${_mySite!.totalExits} exit',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _mySite!.zones.map((z) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                AppColors.primary.withOpacity(0.06),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: AppColors.primary
+                                      .withOpacity(0.25),
+                                ),
+                              ),
+                              child: Text(
+                                z.name,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ] else if (!_loadingSite && _mySite == null) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.warning),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_outlined,
+                          color: AppColors.warning),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'No site assigned yet. Contact admin.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
 
-              // ─── Stats ───
-              const Text(
-                'Ticket Overview',
-                style: TextStyle(
+              // ═══ Ticket overview ═══
+              Text(
+                t.ticketOverview,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -222,8 +433,8 @@ class _OperatorHome extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _statCard(
-                      label: 'Active',
-                      value: '$activeCount',
+                      label: t.active,
+                      value: '${widget.activeCount}',
                       icon: Icons.sync,
                       color: AppColors.primary,
                     ),
@@ -231,8 +442,8 @@ class _OperatorHome extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _statCard(
-                      label: 'Pending',
-                      value: '$pendingCount',
+                      label: t.pending,
+                      value: '${widget.pendingCount}',
                       icon: Icons.pending_outlined,
                       color: AppColors.warning,
                     ),
@@ -240,21 +451,19 @@ class _OperatorHome extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _statCard(
-                      label: 'Resolved',
-                      value: '$resolvedCount',
+                      label: t.resolved,
+                      value: '${widget.resolvedCount}',
                       icon: Icons.check_circle_outline,
                       color: AppColors.success,
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 28),
 
-              // ─── Quick actions ───
-              const Text(
-                'Quick Actions',
-                style: TextStyle(
+              Text(
+                t.quickActions,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -263,14 +472,14 @@ class _OperatorHome extends StatelessWidget {
               _actionTile(
                 context,
                 Icons.confirmation_number_outlined,
-                'My Tickets',
-                'View and manage all tickets at your site',
+                t.myJobsTitle,
+                t.ticketDetailsHint,
                 AppColors.primary,
                     () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => OwnerTicketsTab(user: user),
+                      builder: (_) => OwnerTicketsTab(user: widget.user),
                     ),
                   );
                 },
@@ -278,14 +487,15 @@ class _OperatorHome extends StatelessWidget {
               _actionTile(
                 context,
                 Icons.add_circle_outline,
-                'Create Ticket',
-                'Create a new ticket for your site',
+                t.createTicket,
+                t.ticketDetailsHint,
                 AppColors.accent,
                     () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CreateTicketScreen(user: user),   // ← RIGHT
+                      builder: (_) =>
+                          CreateTicketScreen(user: widget.user),
                     ),
                   );
                 },
@@ -293,14 +503,15 @@ class _OperatorHome extends StatelessWidget {
               _actionTile(
                 context,
                 Icons.notifications_outlined,
-                'Notifications',
-                'Check your alerts',
+                t.notifications,
+                t.checkAlertsHint,
                 AppColors.warning,
                     () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => NotificationsScreen(user: user),
+                      builder: (_) =>
+                          NotificationsScreen(user: widget.user),
                     ),
                   );
                 },
@@ -403,7 +614,10 @@ class _OperatorHome extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),

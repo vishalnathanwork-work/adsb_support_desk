@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/client_model.dart';
 import '../../services/owner_service.dart';
 import '../../widgets/empty_state.dart';
@@ -72,6 +73,7 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
   }
 
   Future<void> _delete(ClientModel client) async {
+    final t = AppLocalizations.of(context)!;
     // Check if client has sites
     final siteCount = await _service.countSitesForClient(client.id);
 
@@ -81,8 +83,7 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Cannot delete: ${client.name} has $siteCount site(s). '
-                'Delete sites first.',
+            t.adminCannotDelete('$siteCount site(s)'),
           ),
           backgroundColor: AppColors.error,
         ),
@@ -93,17 +94,17 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete client?'),
-        content: Text('Delete "${client.name}" permanently?'),
+        title: Text(t.adminDeleteClient),
+        content: Text(t.adminDeleteClientMessage(client.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t.adminCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(t.adminDelete),
           ),
         ],
       ),
@@ -117,16 +118,16 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
 
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Client deleted'),
+        SnackBar(
+          content: Text(t.adminClientDeleted),
           backgroundColor: AppColors.success,
         ),
       );
       _load();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Delete failed'),
+        SnackBar(
+          content: Text(t.adminDeleteFailed),
           backgroundColor: AppColors.error,
         ),
       );
@@ -135,9 +136,11 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Clients'),
+        title: Text(t.adminClientsTitle),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -146,7 +149,7 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
         onPressed: _openCreate,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_business),
-        label: const Text('Add Client'),
+        label: Text(t.adminAddClient),
       ),
       body: Column(
         children: [
@@ -157,9 +160,9 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
             child: TextField(
               controller: _searchController,
               onChanged: (_) => setState(_applyFilter),
-              decoration: const InputDecoration(
-                hintText: 'Search clients by name or code...',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: t.adminSearchClients,
+                prefixIcon: const Icon(Icons.search),
                 filled: true,
               ),
             ),
@@ -170,20 +173,20 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filtered.isEmpty
-                ? const EmptyState(
-              icon: Icons.business_outlined,
-              title: 'No clients yet',
-              subtitle: 'Tap + to add your first client',
-            )
+                ? EmptyState(
+                    icon: Icons.business_outlined,
+                    title: t.adminNoClients,
+                    subtitle: t.adminNoClientsHint,
+                  )
                 : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-                itemCount: _filtered.length,
-                itemBuilder: (context, i) =>
-                    _clientCard(_filtered[i]),
-              ),
-            ),
+                    onRefresh: _load,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                      itemCount: _filtered.length,
+                      itemBuilder: (context, i) =>
+                          _clientCard(_filtered[i]),
+                    ),
+                  ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -37,34 +38,26 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
   }
 
   Future<void> _load() async {
-    final t = await _service.getTicketById(widget.ticketId);
+    final ticket = await _service.getTicketById(widget.ticketId);
     if (!mounted) return;
     setState(() {
-      _ticket = t;
+      _ticket = ticket;
       _isLoading = false;
     });
   }
 
-  // ═══════════════════════════════════════════════
-  // CALL ACTIONS
-  // ═══════════════════════════════════════════════
-
   Future<void> _callClient() async {
     if (_ticket == null) return;
-    final phone =
-    _ticket!.contactPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final t = AppLocalizations.of(context)!;
+    final phone = _ticket!.contactPhone.replaceAll(RegExp(r'[^0-9+]'), '');
     final uri = Uri.parse('tel:$phone');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
       if (!mounted) return;
-      _snack('Cannot call $phone', AppColors.error);
+      _snack(t.cannotCall(_ticket!.contactPhone), AppColors.error);
     }
   }
-
-  // ═══════════════════════════════════════════════
-  // OPEN CHAT
-  // ═══════════════════════════════════════════════
 
   Future<void> _openChat() async {
     if (_ticket == null) return;
@@ -80,17 +73,13 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     _load();
   }
 
-  // ═══════════════════════════════════════════════
-  // OUTCOME ACTIONS
-  // ═══════════════════════════════════════════════
-
   Future<void> _resolveRemotely() async {
+    final t = AppLocalizations.of(context)!;
     final ok = await ActionDialog.confirm(
       context: context,
-      title: 'Resolve Remotely?',
-      message:
-      'Mark this ticket as resolved. The client will be asked to confirm.',
-      confirmLabel: 'Yes, Resolve',
+      title: t.resolveRemotelyTitle,
+      message: t.resolveRemotelyMessage,
+      confirmLabel: t.yesResolve,
       confirmColor: AppColors.success,
     );
     if (!ok) return;
@@ -104,20 +93,19 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     if (!mounted) return;
     setState(() => _isWorking = false);
 
-    _snack('Resolved. Awaiting client confirmation.', AppColors.success);
+    _snack(t.resolvedAwaitingConfirm, AppColors.success);
     Navigator.pop(context);
   }
 
   Future<void> _sendToOnsite() async {
     if (_ticket == null) return;
+    final t = AppLocalizations.of(context)!;
 
     final ok = await ActionDialog.confirm(
       context: context,
-      title: 'Send to On-Site Team?',
-      message:
-      'The on-site queue will show this ticket as UNCLAIMED. '
-          'A technician will claim and attend the site.',
-      confirmLabel: 'Send to On-Site',
+      title: t.sendToOnsiteTitle,
+      message: t.sendToOnsiteMessage,
+      confirmLabel: t.sendToOnsite,
       confirmColor: AppColors.warning,
     );
     if (!ok) return;
@@ -127,7 +115,7 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     if (!mounted) return;
     setState(() => _isWorking = false);
 
-    _snack('Ticket sent to on-site queue.', AppColors.warning);
+    _snack(t.sentToOnsite, AppColors.warning);
     Navigator.pop(context);
   }
 
@@ -136,10 +124,6 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
       SnackBar(content: Text(msg), backgroundColor: color),
     );
   }
-
-  // ═══════════════════════════════════════════════
-  // STATE HELPERS
-  // ═══════════════════════════════════════════════
 
   bool get _isClosedOrCancelled =>
       _ticket == null ||
@@ -155,16 +139,13 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
 
   bool get _canSendToOnsite {
     if (_ticket == null) return false;
-    return _ticket!.status == 'pending' ||
-        _ticket!.status == 'verified';
+    return _ticket!.status == 'pending' || _ticket!.status == 'verified';
   }
-
-  // ═══════════════════════════════════════════════
-  // BUILD
-  // ═══════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (_isLoading && _ticket == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -172,107 +153,100 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     }
     if (_ticket == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Ticket')),
-        body: const Center(child: Text('Ticket not found')),
+        appBar: AppBar(title: Text(t.ticketDetails)),
+        body: Center(child: Text(t.ticketNotFound)),
       );
     }
 
-    final t = _ticket!;
+    final ticket = _ticket!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(t.id)),
+      appBar: AppBar(title: Text(ticket.id)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            // ═══════════════════════════════════════════
-            // CLIENT DETAILS
-            // ═══════════════════════════════════════════
-            _sectionHeader('Client Details'),
+            _sectionHeader(t.clientDetails),
             _card(
               children: [
-                _row('Name', t.createdByName),
-                _row('Role', t.createdByRoleLabel),
-                _row('Contact', '${t.contactName} · ${t.contactPhone}'),
+                _row(t.nameLabel, ticket.createdByName),
+                _row(t.roleLabel, ticket.createdByRoleLabel),
+                _row(
+                  t.contactLabel,
+                  '${ticket.contactName} · ${ticket.contactPhone}',
+                ),
               ],
             ),
 
             const SizedBox(height: AppSpacing.lg),
 
-            // ═══════════════════════════════════════════
-            // TICKET DETAILS
-            // ═══════════════════════════════════════════
-            _sectionHeader('Ticket Details'),
+            _sectionHeader(t.ticketDetails),
             _card(
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Status',
-                        style: TextStyle(
+                        t.statusLabel,
+                        style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
                       ),
                     ),
-                    StatusBadge(status: t.status),
+                    StatusBadge(status: ticket.status),
                   ],
                 ),
                 const SizedBox(height: 10),
-                _row('Product', t.productType),
-                if (t.productIssue.isNotEmpty)
-                  _row('Issue', t.productIssue),
-                _row('Site', '${t.siteName} — ${t.siteLocation}'),
-                _row('Lanes', t.lanesSummary),
-                _row('Reported', DateFormatter.full(t.createdAt)),
-                if (t.description.isNotEmpty)
-                  _row('Description', t.description),
+                _row(t.adminProductLabel, ticket.productType),
+                if (ticket.productIssue.isNotEmpty)
+                  _row(t.adminIssueLabel, ticket.productIssue),
+                _row(
+                  t.siteLabel,
+                  '${ticket.siteName} — ${ticket.siteLocation}',
+                ),
+                _row(t.adminLanesLabel, ticket.lanesSummary),
+                _row(
+                  t.reportedLabel,
+                  DateFormatter.full(ticket.createdAt),
+                ),
+                if (ticket.description.isNotEmpty)
+                  _row(t.descriptionLabel, ticket.description),
               ],
             ),
 
             const SizedBox(height: AppSpacing.lg),
 
-            // ═══════════════════════════════════════════
-            // CONTACT
-            // ═══════════════════════════════════════════
-            _sectionHeader('Contact'),
+            _sectionHeader(t.contactLabel),
 
-            // Open Chat — full width
             _primaryActionButton(
               icon: Icons.chat_bubble_outline,
-              label: 'Open Chat',
+              label: t.openChat,
               color: AppColors.accent,
-              onTap: !_isClosedOrCancelled && !_isWorking
-                  ? _openChat
-                  : null,
+              onTap:
+              !_isClosedOrCancelled && !_isWorking ? _openChat : null,
             ),
 
             const SizedBox(height: AppSpacing.md),
 
-            // Call Client — full width
             _primaryActionButton(
               icon: Icons.phone_in_talk_outlined,
-              label: 'Call Client',
+              label: t.callClient,
               color: AppColors.primary,
-              onTap: !_isClosedOrCancelled && !_isWorking
-                  ? _callClient
-                  : null,
+              onTap:
+              !_isClosedOrCancelled && !_isWorking ? _callClient : null,
             ),
 
             const SizedBox(height: AppSpacing.xl),
 
-            // ═══════════════════════════════════════════
-            // OUTCOME
-            // ═══════════════════════════════════════════
-            _sectionHeader('Outcome'),
+            _sectionHeader(t.outcome),
 
             _outcomeButton(
               icon: Icons.check_circle_outline,
-              label: 'Resolve Remotely',
+              label: t.resolveRemotely,
               subtitle: _canResolveRemotely
-                  ? 'Issue fixed over call or chat'
-                  : 'Not available for current status',
+                  ? t.resolveRemotelyHint
+                  : t.notAvailableStatus,
               color: AppColors.success,
               onTap: _canResolveRemotely && !_isWorking
                   ? _resolveRemotely
@@ -283,14 +257,13 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
 
             _outcomeButton(
               icon: Icons.location_on_outlined,
-              label: 'Send to On-Site Team',
+              label: t.sendToOnsite,
               subtitle: _canSendToOnsite
-                  ? 'Physical visit required'
-                  : 'Not available for current status',
+                  ? t.sendToOnsiteHint
+                  : t.notAvailableStatus,
               color: AppColors.warning,
-              onTap: _canSendToOnsite && !_isWorking
-                  ? _sendToOnsite
-                  : null,
+              onTap:
+              _canSendToOnsite && !_isWorking ? _sendToOnsite : null,
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -300,16 +273,9 @@ class _AdsbTicketActionScreenState extends State<AdsbTicketActionScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════
-  // UI HELPERS
-  // ═══════════════════════════════════════════════
-
   Widget _sectionHeader(String text) {
     return Padding(
-      padding: const EdgeInsets.only(
-        bottom: AppSpacing.sm,
-        left: 4,
-      ),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm, left: 4),
       child: Text(
         text.toUpperCase(),
         style: const TextStyle(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/admin_service.dart';
@@ -11,8 +12,6 @@ import '../adsb/adsb_chat_screen.dart';
 import 'widgets/reassign_sheet.dart';
 import 'widgets/status_override_sheet.dart';
 
-/// Admin-only full-power view of a ticket.
-/// Admins can chat, reassign, override status, and delete.
 class AdminTicketControlScreen extends StatefulWidget {
   final String ticketId;
   final UserModel admin;
@@ -43,10 +42,10 @@ class _AdminTicketControlScreenState
   }
 
   Future<void> _load() async {
-    final t = await _service.getTicketById(widget.ticketId);
+    final ticket = await _service.getTicketById(widget.ticketId);
     if (!mounted) return;
     setState(() {
-      _ticket = t;
+      _ticket = ticket;
       _isLoading = false;
     });
   }
@@ -101,22 +100,22 @@ class _AdminTicketControlScreenState
   }
 
   Future<void> _delete() async {
+    final t = AppLocalizations.of(context)!;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete this ticket?'),
-        content: const Text(
-            'This will permanently remove the ticket and all chat messages. '
-                'This cannot be undone.'),
+        title: Text(t.adminDeleteTicketTitle),
+        content: Text(t.adminDeleteTicketMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t.adminCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),  // ✅
-            child: const Text('Delete'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: Text(t.adminDelete),
           ),
         ],
       ),
@@ -131,16 +130,16 @@ class _AdminTicketControlScreenState
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ticket deleted'),
+        SnackBar(
+          content: Text(t.adminTicketDeleted),
           backgroundColor: AppColors.success,
         ),
       );
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to delete ticket'),
+        SnackBar(
+          content: Text(t.adminDeleteTicketFailed),
           backgroundColor: AppColors.error,
         ),
       );
@@ -149,6 +148,8 @@ class _AdminTicketControlScreenState
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -156,23 +157,24 @@ class _AdminTicketControlScreenState
     }
     if (_ticket == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Ticket')),
-        body: const Center(child: Text('Ticket not found')),
+        appBar: AppBar(title: Text(t.ticketDetails)),
+        body: Center(child: Text(t.ticketNotFound)),
       );
     }
 
-    final t = _ticket!;
-    final canChat = t.status != 'closed' && t.status != 'cancelled';
+    final ticket = _ticket!;
+    final canChat =
+        ticket.status != 'closed' && ticket.status != 'cancelled';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.id),
+        title: Text(ticket.id),
         backgroundColor: AppColors.primaryDark,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _busy ? null : _delete,
-            tooltip: 'Delete ticket',
+            tooltip: t.adminDelete,
           ),
         ],
       ),
@@ -180,7 +182,7 @@ class _AdminTicketControlScreenState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ─── Admin controls card ───
+            // ─── Admin controls ───
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -193,14 +195,17 @@ class _AdminTicketControlScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.admin_panel_settings,
-                          size: 16, color: AppColors.textPrimary),
-                      SizedBox(width: 6),
+                      const Icon(
+                        Icons.admin_panel_settings,
+                        size: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                      const SizedBox(width: 6),
                       Text(
-                        'ADMIN CONTROLS',
-                        style: TextStyle(
+                        t.adminControls,
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -215,7 +220,7 @@ class _AdminTicketControlScreenState
                       Expanded(
                         child: _adminBtn(
                           icon: Icons.swap_horiz,
-                          label: 'Reassign',
+                          label: t.adminReassign,
                           onTap: _busy ? null : _reassign,
                         ),
                       ),
@@ -223,15 +228,14 @@ class _AdminTicketControlScreenState
                       Expanded(
                         child: _adminBtn(
                           icon: Icons.change_circle_outlined,
-                          label: 'Status',
+                          label: t.adminStatusBtn,
                           onTap: _busy ? null : _overrideStatus,
                         ),
                       ),
                     ],
                   ),
 
-                  // ─── Last admin action (add this) ───
-                  if (t.lastAdminAction != null) ...[
+                  if (ticket.lastAdminAction != null) ...[
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -239,7 +243,8 @@ class _AdminTicketControlScreenState
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: AppColors.textPrimary.withOpacity(0.15),
+                          color:
+                          AppColors.textPrimary.withOpacity(0.15),
                         ),
                       ),
                       child: Column(
@@ -254,8 +259,8 @@ class _AdminTicketControlScreenState
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                'LAST ADMIN ACTION',
-                                style: TextStyle(
+                                t.adminLastAction,
+                                style: const TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,
@@ -266,15 +271,15 @@ class _AdminTicketControlScreenState
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${t.lastAdminAction!['action']} — '
-                                '${t.lastAdminAction!['reason'] ?? 'no reason'}',
+                            '${ticket.lastAdminAction!['action']} — '
+                                '${ticket.lastAdminAction!['reason'] ?? t.adminNoReason}',
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                           Text(
-                            'by ${t.lastAdminAction!['by'] ?? '—'}',
+                            'by ${ticket.lastAdminAction!['by'] ?? '—'}',
                             style: const TextStyle(
                               fontSize: 10,
                               color: AppColors.textTertiary,
@@ -284,68 +289,78 @@ class _AdminTicketControlScreenState
                       ),
                     ),
                   ],
-
                 ],
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // ─── Reported by ───
             _card(
-              title: 'Reported By',
+              title: t.adminReportedBy,
               children: [
-                _row('Name', t.createdByName),
-                _row('Role', t.createdByRoleLabel),
-                _row('Email', t.createdBy),
-                _row('Contact', '${t.contactName} (${t.contactPhone})'),
+                _row(t.nameLabel, ticket.createdByName),
+                _row(t.roleLabel, ticket.createdByRoleLabel),
+                _row(t.emailLabel, ticket.createdBy),
+                _row(
+                  t.contactLabel,
+                  '${ticket.contactName} (${ticket.contactPhone})',
+                ),
               ],
             ),
 
             const SizedBox(height: 12),
 
-            // ─── Ticket details ───
             _card(
-              title: 'Ticket Details',
+              title: t.ticketDetails,
               children: [
                 Row(
                   children: [
-                    const Expanded(
-                      child: Text('Status',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary)),
+                    Expanded(
+                      child: Text(
+                        t.adminStatusLabel,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ),
-                    StatusBadge(status: t.status),
+                    StatusBadge(status: ticket.status),
                   ],
                 ),
                 const SizedBox(height: 10),
-                _row('Product', t.productType),
-                _row('Issue', t.productIssue),
-                _row('Site', '${t.siteName} — ${t.siteLocation}'),
-                _row('Parking',
-                    '${t.laneName} (${t.laneDirectionDisplay})'),
-                _row('Reported', DateFormatter.full(t.createdAt)),
-                if (t.description.isNotEmpty)
-                  _row('Description', t.description),
+                _row(t.adminProductLabel, ticket.productType),
+                _row(t.adminIssueLabel, ticket.productIssue),
+                _row(
+                  t.adminSiteLabel,
+                  '${ticket.siteName} — ${ticket.siteLocation}',
+                ),
+                _row(
+                  t.adminLanesLabel,
+                  '${ticket.laneName} (${ticket.laneDirectionDisplay})',
+                ),
+                _row(t.adminReportedLabel,
+                    DateFormatter.full(ticket.createdAt)),
+                if (ticket.description.isNotEmpty)
+                  _row(t.adminDescriptionLabel, ticket.description),
 
-                // ─── Assignment ───
-                if (t.assignedTo != null) ...[
+                if (ticket.assignedTo != null) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  _row('Assigned To', t.assignedToName ?? t.assignedTo!),
-                  _row('Assigned Email', t.assignedTo!),
+                  _row(
+                    t.adminAssignedTo,
+                    ticket.assignedToName ?? ticket.assignedTo!,
+                  ),
+                  _row(t.adminAssignedEmail, ticket.assignedTo!),
                 ],
 
-                // ─── Reported Photos ───
-                if (t.imageUrls.isNotEmpty) ...[
+                if (ticket.imageUrls.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Reported Photos',
-                    style: TextStyle(
+                  Text(
+                    t.reportedPhotos,
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textSecondary,
@@ -353,20 +368,19 @@ class _AdminTicketControlScreenState
                   ),
                   const SizedBox(height: 8),
                   ImageGallery(
-                    urls: t.imageUrls,
-                    title: 'Reported Photos',
+                    urls: ticket.imageUrls,
+                    title: t.reportedPhotos,
                   ),
                 ],
 
-                // ─── Completion Evidence ───
-                if (t.completionImageUrl != null &&
-                    t.completionImageUrl!.isNotEmpty) ...[
+                if (ticket.completionImageUrl != null &&
+                    ticket.completionImageUrl!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Completion Evidence',
-                    style: TextStyle(
+                  Text(
+                    t.completionEvidence,
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.success,
@@ -374,8 +388,8 @@ class _AdminTicketControlScreenState
                   ),
                   const SizedBox(height: 8),
                   ImageGallery(
-                    urls: [t.completionImageUrl!],
-                    title: 'Completion Evidence',
+                    urls: [ticket.completionImageUrl!],
+                    title: t.completionEvidence,
                   ),
                 ],
               ],
@@ -383,62 +397,84 @@ class _AdminTicketControlScreenState
 
             const SizedBox(height: 12),
 
-            // ─── Resolution ───
-            if (t.rootCause != null ||
-                t.solutionApplied != null ||
-                t.resolutionNotes != null) ...[
+            if (ticket.rootCause != null ||
+                ticket.solutionApplied != null ||
+                ticket.resolutionNotes != null) ...[
               _card(
-                title: 'Resolution',
+                title: t.resolution,
                 children: [
-                  _row('Root Cause', t.rootCause ?? '—'),
-                  _row('Solution', t.solutionApplied ?? '—'),
-                  if (t.resolutionNotes != null &&
-                      t.resolutionNotes!.isNotEmpty)
-                    _row('Notes', t.resolutionNotes!),
-                  if (t.resolvedAt != null)
-                    _row('Resolved At', DateFormatter.full(t.resolvedAt!)),
+                  _row(t.rootCause, ticket.rootCause ?? '—'),
+                  _row(t.solution, ticket.solutionApplied ?? '—'),
+                  if (ticket.resolutionNotes != null &&
+                      ticket.resolutionNotes!.isNotEmpty)
+                    _row(t.notes, ticket.resolutionNotes!),
+                  if (ticket.resolvedAt != null)
+                    _row(t.resolvedAt,
+                        DateFormatter.full(ticket.resolvedAt!)),
                 ],
               ),
               const SizedBox(height: 12),
             ],
 
-            // ─── Timeline ───
             _card(
-              title: 'Timeline',
+              title: t.adminTimelineTitle,
               children: [
-                _timelineRow('Created', t.createdAt),
-                if (t.adsbNotifiedAt != null)
-                  _timelineRow('ADSB notified', t.adsbNotifiedAt!),
-                if (t.verifiedAt != null)
-                  _timelineRow('Verified / escalated', t.verifiedAt!),
-                if (t.ttSolutionProvidedAt != null)
-                  _timelineRow('TT advice provided', t.ttSolutionProvidedAt!),
-                if (t.adsbPickupAt != null)
-                  _timelineRow('On-site picked up', t.adsbPickupAt!),
-                if (t.workCompletedAt != null)
-                  _timelineRow('Work completed', t.workCompletedAt!),
-                if (t.resolvedAt != null)
-                  _timelineRow('Resolved', t.resolvedAt!),
-                if (t.clientConfirmedAt != null)
-                  _timelineRow('Client confirmed', t.clientConfirmedAt!),
-                if (t.reopenedAt != null)
-                  _timelineRow('Reopened', t.reopenedAt!),
+                _timelineRow(t.adminReportedLabel, ticket.createdAt),
+                if (ticket.adsbNotifiedAt != null)
+                  _timelineRow(
+                    t.adsbPending,
+                    ticket.adsbNotifiedAt!,
+                  ),
+                if (ticket.verifiedAt != null)
+                  _timelineRow(
+                    t.statusVerifiedLabel,
+                    ticket.verifiedAt!,
+                  ),
+                if (ticket.ttSolutionProvidedAt != null)
+                  _timelineRow(
+                    t.technicalAdvisor,
+                    ticket.ttSolutionProvidedAt!,
+                  ),
+                if (ticket.adsbPickupAt != null)
+                  _timelineRow(
+                    t.statusInProgressLabel,
+                    ticket.adsbPickupAt!,
+                  ),
+                if (ticket.workCompletedAt != null)
+                  _timelineRow(
+                    t.onsiteJobCompleted,
+                    ticket.workCompletedAt!,
+                  ),
+                if (ticket.resolvedAt != null)
+                  _timelineRow(t.resolved, ticket.resolvedAt!),
+                if (ticket.clientConfirmedAt != null)
+                  _timelineRow(
+                    t.statusClosedLabel,
+                    ticket.clientConfirmedAt!,
+                  ),
+                if (ticket.reopenedAt != null)
+                  _timelineRow(
+                    t.statusReopenedLabel,
+                    ticket.reopenedAt!,
+                  ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            // ─── Chat ───
             if (canChat)
               SizedBox(
                 height: 52,
                 child: ElevatedButton.icon(
                   onPressed: _openChat,
-                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  label: const Text(
-                    'Open Chat (post as ADSB Support)',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600),
+                  icon:
+                  const Icon(Icons.chat_bubble_outline, size: 20),
+                  label: Text(
+                    t.adminOpenChatAsSupport,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
@@ -502,11 +538,14 @@ class _AdminTicketControlScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
+          ),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -522,14 +561,22 @@ class _AdminTicketControlScreenState
         children: [
           SizedBox(
             width: 110,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -551,13 +598,17 @@ class _AdminTicketControlScreenState
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(label,
-                style: const TextStyle(fontSize: 12)),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
           Text(
             DateFormatter.relative(time),
             style: const TextStyle(
-                fontSize: 11, color: AppColors.textSecondary),
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),

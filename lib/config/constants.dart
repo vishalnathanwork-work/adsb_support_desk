@@ -4,7 +4,24 @@ class AppConstants {
   static const String appName = 'Parken Assist';
   static const String appVersion = '1.0.0';
 
-  // Mock users for testing
+  // ═══════════════════════════════════════════════
+  // ADMIN CONTACT
+  // ═══════════════════════════════════════════════
+
+  /// Admin WhatsApp number — international format WITHOUT + or spaces.
+  /// Example: Malaysia number +60 12-345 6789 → "60123456789"
+  /// ⚠️ REPLACE THIS with the real admin WhatsApp number.
+  static const String adminWhatsAppNumber = '60123456789';
+
+  /// Pre-filled message when user taps "Chat with admin".
+  static const String adminWhatsAppMessage =
+      'Hi ADSB Admin, I forgot my password for the Parken Assist app. '
+      'Please help me reset it. My username is: ';
+
+  // ═══════════════════════════════════════════════
+  // MOCK USERS (for testing only — remove in production)
+  // ═══════════════════════════════════════════════
+
   static final Map<String, UserModel> mockUsers = {
     'owner@adsb.com': UserModel(
       email: 'owner@adsb.com',
@@ -43,7 +60,6 @@ class AppConstants {
     ),
   };
 
-  // Mock passwords (in real app, this comes from backend)
   static const Map<String, String> mockPasswords = {
     'owner@adsb.com': 'client123',
     'operator@adsb.com': 'operator123',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -29,66 +30,64 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
         builder: (_) => CreateTicketScreen(user: widget.user),
       ),
     );
-    // No reload — the stream handles new tickets.
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final siteIds = widget.user.siteIds;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: Text(t.tabHome),
       ),
       body: SafeArea(
         child: siteIds.isEmpty
-            ? _noSitesView()
+            ? _noSitesView(t)
             : StreamBuilder<List<Ticket>>(
-          stream: _service.streamActiveTicketsForSites(siteIds),
-          builder: (context, snapshot) {
-            final tickets = snapshot.data ?? [];
+                stream: _service.streamActiveTicketsForSites(siteIds),
+                builder: (context, snapshot) {
+                  final tickets = snapshot.data ?? [];
 
-            final pending = tickets
-                .where((t) => t.status == 'pending')
-                .length;
+                  final pending = tickets
+                      .where((ticket) => ticket.status == 'pending')
+                      .length;
 
-            final active = tickets
-                .where((t) =>
-            t.status == 'verified' ||
-                t.status == 'pending_onsite' ||
-                t.status == 'in_progress')
-                .length;
+                  final active = tickets
+                      .where((ticket) =>
+                          ticket.status == 'verified' ||
+                          ticket.status == 'pending_onsite' ||
+                          ticket.status == 'in_progress')
+                      .length;
 
-            final resolved = tickets
-                .where((t) =>
-            t.status == 'resolved' || t.status == 'closed')
-                .length;
+                  final resolved = tickets
+                      .where((ticket) =>
+                          ticket.status == 'resolved' || ticket.status == 'closed')
+                      .length;
 
-            return RefreshIndicator(
-              onRefresh: () async {
-                // Stream-driven — no reload needed, but allow pull
-                // for user satisfaction.
-                await Future.delayed(
-                    const Duration(milliseconds: 300));
-              },
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _welcomeCard(),
-                  const SizedBox(height: 20),
-                  _statsRow(pending, active, resolved),
-                  const SizedBox(height: 24),
-                  _createButton(),
-                ],
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await Future.delayed(
+                          const Duration(milliseconds: 300));
+                    },
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        _welcomeCard(t),
+                        const SizedBox(height: 20),
+                        _statsRow(t, pending, active, resolved),
+                        const SizedBox(height: 24),
+                        _createButton(t),
+                      ],
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
       ),
     );
   }
 
-  Widget _noSitesView() {
+  Widget _noSitesView(AppLocalizations t) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -98,16 +97,16 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
             const Icon(Icons.location_off_outlined,
                 size: 64, color: AppColors.textSecondary),
             const SizedBox(height: 16),
-            const Text(
-              'No sites assigned',
-              style: TextStyle(
+            Text(
+              t.noSitesAssigned,
+              style: const TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Contact admin to assign sites to your account.',
+            Text(
+              t.contactAdmin,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                   fontSize: 14, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 24),
@@ -116,7 +115,7 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
               child: OutlinedButton.icon(
                 onPressed: widget.onLogout,
                 icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Logout'),
+                label: Text(t.logOut),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.error,
                   side: const BorderSide(color: AppColors.error),
@@ -129,7 +128,7 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
     );
   }
 
-  Widget _welcomeCard() {
+  Widget _welcomeCard(AppLocalizations t) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -144,7 +143,7 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Welcome back,',
+            '${t.welcomeBack},',
             style: TextStyle(
               color: Colors.white.withOpacity(0.85),
               fontSize: 14,
@@ -174,19 +173,19 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
     );
   }
 
-  Widget _statsRow(int pending, int active, int resolved) {
+  Widget _statsRow(AppLocalizations t, int pending, int active, int resolved) {
     return Row(
       children: [
         Expanded(
-          child: _statCard('Pending', '$pending', AppColors.warning),
+          child: _statCard(t.pending, '$pending', AppColors.warning),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _statCard('Active', '$active', AppColors.accent),
+          child: _statCard(t.active, '$active', AppColors.accent),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _statCard('Resolved', '$resolved', AppColors.success),
+          child: _statCard(t.resolved, '$resolved', AppColors.success),
         ),
       ],
     );
@@ -223,15 +222,15 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
     );
   }
 
-  Widget _createButton() {
+  Widget _createButton(AppLocalizations t) {
     return SizedBox(
       height: 56,
       child: ElevatedButton.icon(
         onPressed: _openCreate,
         icon: const Icon(Icons.add),
-        label: const Text(
-          'Create New Ticket',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        label: Text(
+          t.createTicket,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,

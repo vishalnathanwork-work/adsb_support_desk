@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -36,10 +37,10 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
   }
 
   Future<void> _load() async {
-    final t = await _service.getTicketById(widget.ticketId);
+    final ticket = await _service.getTicketById(widget.ticketId);
     if (!mounted) return;
     setState(() {
-      _ticket = t;
+      _ticket = ticket;
       _isLoading = false;
     });
   }
@@ -59,6 +60,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
   }
 
   Future<void> _callAdsbAgent() async {
+    final l10n = AppLocalizations.of(context)!;
     const adsbPhone = '+60 12-345 6791';
     final uri = Uri.parse('tel:$adsbPhone');
     if (await canLaunchUrl(uri)) {
@@ -66,13 +68,15 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot call ADSB agent')),
+        SnackBar(content: Text(l10n.cannotCall('ADSB'))),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -80,20 +84,20 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
     }
     if (_ticket == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Ticket')),
-        body: const Center(child: Text('Ticket not found')),
+        appBar: AppBar(title: Text(t.ticketsTitle)),
+        body: Center(child: Text(t.ticketNotFound)),
       );
     }
 
-    final t = _ticket!;
+    final ticket = _ticket!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.id),
+        title: Text(ticket.id),
         actions: [
           IconButton(
             icon: const Icon(Icons.phone_in_talk_outlined),
-            tooltip: 'Call ADSB agent',
+            tooltip: t.callClient,
             onPressed: _callAdsbAgent,
           ),
         ],
@@ -102,48 +106,52 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            // ─── Ticket Details ───
             _card(
-              title: 'Ticket Details',
+              title: t.ticketDetails,
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Status',
-                        style: TextStyle(
+                        t.statusLabel,
+                        style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
                       ),
                     ),
-                    TTStatusBadge(status: t.status),
+                    TTStatusBadge(status: ticket.status),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _row('Reported by', t.createdByName),
-                _row('Contact', '${t.contactName} — ${t.contactPhone}'),
-                _row('Site', t.siteName),
-                _row('Location', t.siteLocation),
+                _row(t.adminReportedBy, ticket.createdByName),
                 _row(
-                  'Parking',
-                  '${t.laneName} (${t.laneDirectionDisplay})',
+                  t.contactLabel,
+                  '${ticket.contactName} — ${ticket.contactPhone}',
                 ),
-                _row('Product', t.productType),
-                if (t.productIssue.isNotEmpty)
-                  _row('Issue', t.productIssue),
-                if (t.description.isNotEmpty)
-                  _row('Description', t.description),
-                _row('Reported at', DateFormatter.full(t.createdAt)),
+                _row(t.siteLabel, ticket.siteName),
+                _row(t.location, ticket.siteLocation),
+                _row(
+                  t.parkingLabel,
+                  '${ticket.laneName} (${ticket.laneDirectionDisplay})',
+                ),
+                _row(t.adminProductLabel, ticket.productType),
+                if (ticket.productIssue.isNotEmpty)
+                  _row(t.adminIssueLabel, ticket.productIssue),
+                if (ticket.description.isNotEmpty)
+                  _row(t.descriptionLabel, ticket.description),
+                _row(
+                  t.reportedLabel,
+                  DateFormatter.full(ticket.createdAt),
+                ),
 
-                // ─── Reported photos ───
-                if (t.imageUrls.isNotEmpty) ...[
+                if (ticket.imageUrls.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Reported Photos',
-                    style: TextStyle(
+                  Text(
+                    t.reportedPhotos,
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textSecondary,
@@ -151,20 +159,19 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                   ),
                   const SizedBox(height: 8),
                   ImageGallery(
-                    urls: t.imageUrls,
-                    title: 'Reported Photos',
+                    urls: ticket.imageUrls,
+                    title: t.reportedPhotos,
                   ),
                 ],
 
-                // ─── Completion evidence ───
-                if (t.completionImageUrl != null &&
-                    t.completionImageUrl!.isNotEmpty) ...[
+                if (ticket.completionImageUrl != null &&
+                    ticket.completionImageUrl!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Completion Evidence',
-                    style: TextStyle(
+                  Text(
+                    t.completionEvidence,
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.success,
@@ -172,28 +179,27 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                   ),
                   const SizedBox(height: 8),
                   ImageGallery(
-                    urls: [t.completionImageUrl!],
-                    title: 'Completion Evidence',
+                    urls: [ticket.completionImageUrl!],
+                    title: t.completionEvidence,
                   ),
                 ],
               ],
             ),
 
-            // ─── Escalation reason ───
-            if (t.escalationReason != null) ...[
+            if (ticket.escalationReason != null) ...[
               const SizedBox(height: AppSpacing.lg),
               _card(
-                title: 'Reason for Escalation',
+                title: t.descriptionLabel,
                 children: [
                   Text(
-                    t.escalationReason!,
+                    ticket.escalationReason!,
                     style: const TextStyle(
                       fontSize: 13,
                       height: 1.5,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  if (t.assignedToName != null) ...[
+                  if (ticket.assignedToName != null) ...[
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -204,7 +210,7 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Escalated by ${t.assignedToName}',
+                          t.escalatedBy(ticket.assignedToName!),
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,
@@ -219,15 +225,14 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
 
             const SizedBox(height: AppSpacing.xl),
 
-            // ─── Chat ───
             SizedBox(
               height: 60,
               child: ElevatedButton.icon(
                 onPressed: _openChat,
                 icon: const Icon(Icons.chat_bubble_outline, size: 22),
-                label: const Text(
-                  'Open Chat',
-                  style: TextStyle(
+                label: Text(
+                  t.openChat,
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -244,12 +249,11 @@ class _TechnicianReviewScreenState extends State<TechnicianReviewScreen> {
 
             const SizedBox(height: AppSpacing.md),
 
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                'Provide your advice directly in the chat. '
-                    'The ADSB team will act on it and update the client.',
-                style: TextStyle(
+                t.technicianAdviceHint,
+                style: const TextStyle(
                   fontSize: 11,
                   color: AppColors.textSecondary,
                   fontStyle: FontStyle.italic,

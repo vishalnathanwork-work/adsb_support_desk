@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/notification_model.dart';
 import '../../models/user_model.dart';
 import '../../services/notification_service.dart';
@@ -68,8 +69,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: Text(t.notificationsTitle)),
       body: StreamBuilder<List<AppNotification>>(
         stream: _service.streamMyNotifications(widget.user.email),
         builder: (context, snapshot) {
@@ -87,9 +90,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     const Icon(Icons.error_outline,
                         size: 48, color: AppColors.error),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Error loading notifications',
-                      style: TextStyle(
+                    Text(
+                      t.notificationsError,
+                      style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 6),
@@ -109,10 +112,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final all = snapshot.data ?? [];
 
           if (all.isEmpty) {
-            return const EmptyState(
+            return EmptyState(
               icon: Icons.notifications_none,
-              title: 'No notifications',
-              subtitle: 'Updates will appear here',
+              title: t.notificationsEmpty,
+              subtitle: t.notificationsEmptyHint,
             );
           }
 
@@ -127,22 +130,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _chip('All', 'all', all.length),
+                      _chip(t.notificationsTabAll, 'all', all.length),
                       const SizedBox(width: 8),
                       _chip(
-                        'Tickets',
+                        t.notificationsTabTickets,
                         'ticket',
                         _applyFilter(all, target: 'ticket').length,
                       ),
                       const SizedBox(width: 8),
                       _chip(
-                        'Assignments',
+                        t.notificationsTabAssignments,
                         'assignment',
                         _applyFilter(all, target: 'assignment').length,
                       ),
                       const SizedBox(width: 8),
                       _chip(
-                        'Account',
+                        t.notificationsTabAccount,
                         'user',
                         _applyFilter(all, target: 'user').length,
                       ),
@@ -152,17 +155,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
               Expanded(
                 child: filtered.isEmpty
-                    ? const EmptyState(
-                  icon: Icons.inbox_outlined,
-                  title: 'No notifications in this category',
-                  subtitle: 'Try a different filter',
-                )
+                    ? EmptyState(
+                        icon: Icons.inbox_outlined,
+                        title: t.notificationsNoneInCategory,
+                        subtitle: t.notificationsTryDifferent,
+                      )
                     : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, i) =>
-                      _notificationTile(filtered[i]),
-                ),
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) =>
+                            _notificationTile(filtered[i]),
+                      ),
               ),
             ],
           );

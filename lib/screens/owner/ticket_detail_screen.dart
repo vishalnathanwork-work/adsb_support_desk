@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -57,43 +58,47 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _confirmResolution() async {
+    final t = AppLocalizations.of(context)!;
     await _service.confirmResolution(widget.ticketId);
     await _load();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ticket closed. Thank you!'),
+      SnackBar(
+        content: Text(t.ticketClosedThanks),
         backgroundColor: AppColors.success,
       ),
     );
   }
 
   Future<void> _reopen() async {
+    final t = AppLocalizations.of(context)!;
     await _service.reopenTicket(widget.ticketId);
     await _load();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ticket reopened.'),
+      SnackBar(
+        content: Text(t.ticketReopened),
         backgroundColor: AppColors.warning,
       ),
     );
   }
 
   Future<void> _cancel() async {
+    final t = AppLocalizations.of(context)!;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Cancel this ticket?'),
-        content: const Text('This action cannot be undone.'),
+        title: Text(t.cancelTicketTitle),
+        content: Text(t.cancelTicketMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
+            child: Text(t.no),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yes, cancel'),
+            child: Text(t.yesCancel),
           ),
         ],
       ),
@@ -107,6 +112,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -114,20 +121,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
     if (_ticket == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Ticket')),
-        body: const Center(child: Text('Ticket not found')),
+        appBar: AppBar(title: Text(t.ticketsTitle)),
+        body: Center(child: Text(t.ticketNotFound)),
       );
     }
 
-    final t = _ticket!;
-    final canChat = t.status != 'closed' && t.status != 'cancelled';
-    final isResolved = t.status == 'resolved';
+    final ticket = _ticket!;
+    final canChat = ticket.status != 'closed' &&
+        ticket.status != 'cancelled';
+    final isResolved = ticket.status == 'resolved';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.id),
+        title: Text(ticket.id),
         actions: [
-          if (t.isActive)
+          if (ticket.isActive)
             IconButton(
               icon: const Icon(Icons.cancel_outlined),
               onPressed: _cancel,
@@ -138,7 +146,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ─── Header card ───
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -153,19 +160,19 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          t.productType,
+                          ticket.productType,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      StatusBadge(status: t.status),
+                      StatusBadge(status: ticket.status),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    t.productIssue,
+                    ticket.productIssue,
                     style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textSecondary,
@@ -173,7 +180,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    t.statusDisplay,
+                    ticket.statusDisplay,
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.primary,
@@ -186,16 +193,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
             const SizedBox(height: 16),
 
-            // ─── Chat button ───
             if (canChat) ...[
               SizedBox(
                 height: 52,
                 child: ElevatedButton.icon(
                   onPressed: _openChat,
                   icon: const Icon(Icons.chat_bubble_outline),
-                  label: const Text(
-                    'Open Chat',
-                    style: TextStyle(
+                  label: Text(
+                    t.openChat,
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -212,62 +218,60 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               const SizedBox(height: 16),
             ],
 
-            // ─── Details ───
-            _section('Ticket Details'),
-            _infoTile('Site', '${t.siteName} — ${t.siteLocation}'),
-            _infoTile('Parking',
-                '${t.laneName} (${t.laneDirectionDisplay})'),
-            _infoTile('Contact',
-                '${t.contactName} (${t.contactPhone})'),
-            _infoTile('Reported', DateFormatter.full(t.createdAt)),
-            if (t.description.isNotEmpty)
-              _infoTile('Description', t.description),
+            _section(t.ticketDetails),
+            _infoTile(t.siteLabel,
+                '${ticket.siteName} — ${ticket.siteLocation}'),
+            _infoTile(t.parkingLabel,
+                '${ticket.laneName} (${ticket.laneDirectionDisplay})'),
+            _infoTile(t.contactLabel,
+                '${ticket.contactName} (${ticket.contactPhone})'),
+            _infoTile(t.reportedLabel,
+                DateFormatter.full(ticket.createdAt)),
+            if (ticket.description.isNotEmpty)
+              _infoTile(t.descriptionLabel, ticket.description),
 
-            // ── Reported Photos ──
-            if (t.imageUrls.isNotEmpty) ...[
+            if (ticket.imageUrls.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _section('Reported Photos'),
+              _section(t.reportedPhotos),
               const SizedBox(height: 8),
               ImageGallery(
-                urls: t.imageUrls,
-                title: 'Reported Photos',
+                urls: ticket.imageUrls,
+                title: t.reportedPhotos,
               ),
             ],
 
-            // ── Completion Evidence ──
-            if (t.completionImageUrl != null &&
-                t.completionImageUrl!.isNotEmpty) ...[
+            if (ticket.completionImageUrl != null &&
+                ticket.completionImageUrl!.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _section('Completion Evidence'),
+              _section(t.completionEvidence),
               const SizedBox(height: 8),
               ImageGallery(
-                urls: [t.completionImageUrl!],
-                title: 'Completion Evidence',
+                urls: [ticket.completionImageUrl!],
+                title: t.completionEvidence,
               ),
             ],
 
             const SizedBox(height: 16),
 
-            // ─── Resolution ───
-            if (t.resolvedAt != null) ...[
-              _section('Resolution'),
-              _infoTile('Root Cause', t.rootCause ?? '—'),
-              _infoTile('Solution', t.solutionApplied ?? '—'),
-              if (t.resolutionNotes != null &&
-                  t.resolutionNotes!.isNotEmpty)
-                _infoTile('Notes', t.resolutionNotes!),
-              _infoTile('Resolved At', DateFormatter.full(t.resolvedAt!)),
+            if (ticket.resolvedAt != null) ...[
+              _section(t.resolution),
+              _infoTile(t.rootCause, ticket.rootCause ?? '—'),
+              _infoTile(t.solution, ticket.solutionApplied ?? '—'),
+              if (ticket.resolutionNotes != null &&
+                  ticket.resolutionNotes!.isNotEmpty)
+                _infoTile(t.notes, ticket.resolutionNotes!),
+              _infoTile(t.resolvedAt,
+                  DateFormatter.full(ticket.resolvedAt!)),
               const SizedBox(height: 16),
             ],
 
-            // ─── Confirmation actions ───
             if (isResolved) ...[
               SizedBox(
                 height: 50,
                 child: ElevatedButton.icon(
                   onPressed: _confirmResolution,
                   icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Confirm Resolution'),
+                  label: Text(t.confirmResolution),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
@@ -283,7 +287,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _reopen,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Reopen Ticket'),
+                  label: Text(t.reopenTicket),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.error),
                     foregroundColor: AppColors.error,

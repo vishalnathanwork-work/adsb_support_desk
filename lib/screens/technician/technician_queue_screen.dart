@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/filter_chip_row.dart';
-import 'technician_review_screen.dart';
 import '../../widgets/tt_status_badge.dart';
-
+import 'technician_review_screen.dart';
 
 class TechnicianQueueScreen extends StatefulWidget {
   final UserModel user;
@@ -33,8 +33,10 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Reviews')),
+      appBar: AppBar(title: Text(t.ttQueue)),
       body: StreamBuilder<List<Ticket>>(
         stream: _service.streamTTQueueTickets(),
         builder: (context, snapshot) {
@@ -44,35 +46,35 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                   !snapshot.hasData;
 
           final awaitingCount =
-              allTickets.where((t) => t.status == 'verified').length;
+              allTickets.where((ticket) => ticket.status == 'verified').length;
           final onsiteCount = allTickets
-              .where((t) =>
-          t.status == 'pending_onsite' ||
-              t.status == 'in_progress')
+              .where((ticket) =>
+          ticket.status == 'pending_onsite' ||
+              ticket.status == 'in_progress')
               .length;
 
           final q = _searchController.text.trim().toLowerCase();
 
-          final filtered = allTickets.where((t) {
+          final filtered = allTickets.where((ticket) {
             bool statusMatch;
             switch (_filter) {
               case 'awaiting':
-                statusMatch = t.status == 'verified';
+                statusMatch = ticket.status == 'verified';
                 break;
               case 'onsite':
-                statusMatch = t.status == 'pending_onsite' ||
-                    t.status == 'in_progress';
+                statusMatch = ticket.status == 'pending_onsite' ||
+                    ticket.status == 'in_progress';
                 break;
               default:
                 statusMatch = true;
             }
 
             final searchMatch = q.isEmpty ||
-                t.id.toLowerCase().contains(q) ||
-                t.productType.toLowerCase().contains(q) ||
-                t.productIssue.toLowerCase().contains(q) ||
-                t.siteName.toLowerCase().contains(q) ||
-                t.createdByName.toLowerCase().contains(q);
+                ticket.id.toLowerCase().contains(q) ||
+                ticket.productType.toLowerCase().contains(q) ||
+                ticket.productIssue.toLowerCase().contains(q) ||
+                ticket.siteName.toLowerCase().contains(q) ||
+                ticket.createdByName.toLowerCase().contains(q);
 
             return statusMatch && searchMatch;
           }).toList();
@@ -90,9 +92,9 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                 child: TextField(
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    hintText: 'Search...',
-                    prefixIcon: Icon(Icons.search),
+                  decoration: InputDecoration(
+                    hintText: t.technicianSearchHint,
+                    prefixIcon: const Icon(Icons.search),
                     filled: true,
                   ),
                 ),
@@ -108,16 +110,16 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                 ),
                 options: [
                   FilterOption(
-                    label: 'Awaiting You',
+                    label: t.ttAwaitingYou,
                     value: 'awaiting',
                     count: awaitingCount,
                   ),
                   FilterOption(
-                    label: 'On-Site',
+                    label: t.adsbOnSite,
                     value: 'onsite',
                     count: onsiteCount,
                   ),
-                  const FilterOption(label: 'All', value: 'all'),
+                  FilterOption(label: t.ttAll, value: 'all'),
                 ],
               ),
               Expanded(
@@ -127,11 +129,11 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                     ? EmptyState(
                   icon: Icons.check_circle_outline,
                   title: _filter == 'awaiting'
-                      ? 'All caught up!'
-                      : 'No tickets found',
+                      ? t.allCaughtUp
+                      : t.ttNoTickets,
                   subtitle: _filter == 'awaiting'
-                      ? 'No tickets awaiting your review'
-                      : 'Try changing your filter',
+                      ? t.ttNoAwaiting
+                      : t.ttTryChangeFilter,
                 )
                     : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(
@@ -142,7 +144,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                   ),
                   itemCount: filtered.length,
                   itemBuilder: (context, i) =>
-                      _ticketCard(filtered[i]),
+                      _ticketCard(filtered[i], t),
                 ),
               ),
             ],
@@ -152,7 +154,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
     );
   }
 
-  Widget _ticketCard(Ticket t) {
+  Widget _ticketCard(Ticket ticket, AppLocalizations t) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Material(
@@ -163,7 +165,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => TechnicianReviewScreen(
-                  ticketId: t.id,
+                  ticketId: ticket.id,
                   user: widget.user,
                 ),
               ),
@@ -184,7 +186,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        t.id,
+                        ticket.id,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -193,12 +195,12 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                         ),
                       ),
                     ),
-                    TTStatusBadge(status: t.status),
+                    TTStatusBadge(status: ticket.status),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  t.productType,
+                  ticket.productType,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -206,7 +208,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  t.productIssue,
+                  ticket.productIssue,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -226,7 +228,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        '${t.siteName} · ${t.lanesSummary}',
+                        '${ticket.siteName} · ${ticket.lanesSummary}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -235,7 +237,7 @@ class _TechnicianQueueScreenState extends State<TechnicianQueueScreen> {
                       ),
                     ),
                     Text(
-                      DateFormatter.relative(t.updatedAt),
+                      DateFormatter.relative(ticket.updatedAt),
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.textTertiary,

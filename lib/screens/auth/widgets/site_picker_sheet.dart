@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/site_model.dart';
 
 class SitePickerSheet extends StatefulWidget {
@@ -66,14 +67,14 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
   }
 
   void _confirm() {
-    final picked = widget.allSites
-        .where((s) => _selectedIds.contains(s.id))
-        .toList();
+    final picked =
+    widget.allSites.where((s) => _selectedIds.contains(s.id)).toList();
     Navigator.pop(context, picked);
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final media = MediaQuery.of(context);
 
     return Container(
@@ -106,8 +107,8 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                     children: [
                       Text(
                         widget.allowMultiple
-                            ? 'Select Sites'
-                            : 'Select a Site',
+                            ? t.pickerSelectSites
+                            : t.pickerSelectOneSite,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -116,8 +117,8 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                       const SizedBox(height: 2),
                       Text(
                         widget.allowMultiple
-                            ? 'You can pick multiple sites'
-                            : 'Pick exactly one site',
+                            ? t.pickerMultiHint
+                            : t.pickerSingleHint,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -129,13 +130,15 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                 if (_selectedIds.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${_selectedIds.length} selected',
+                      t.pickerSelectedCount('${_selectedIds.length}'),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -151,9 +154,9 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search site name or address...',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: t.pickerSearchHint,
+                prefixIcon: const Icon(Icons.search),
                 filled: true,
               ),
             ),
@@ -162,18 +165,21 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
 
           Expanded(
             child: _filtered.isEmpty
-                ? const Center(
+                ? Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
+                padding: const EdgeInsets.all(32),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.location_off_outlined,
-                        size: 48, color: AppColors.textSecondary),
-                    SizedBox(height: 12),
+                    const Icon(
+                      Icons.location_off_outlined,
+                      size: 48,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(height: 12),
                     Text(
-                      'No sites match your search',
-                      style: TextStyle(
+                      t.pickerNoMatch,
+                      style: const TextStyle(
                         fontSize: 14,
                         color: AppColors.textSecondary,
                       ),
@@ -188,7 +194,6 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
               itemBuilder: (context, i) {
                 final site = _filtered[i];
                 final selected = _selectedIds.contains(site.id);
-
                 return _siteRow(site, selected);
               },
             ),
@@ -212,7 +217,7 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                 Expanded(
                   child: TextButton(
                     onPressed: () => Navigator.pop(context, null),
-                    child: const Text('Cancel'),
+                    child: Text(t.adminCancel),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -228,9 +233,9 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Confirm',
-                      style: TextStyle(
+                    child: Text(
+                      t.confirmLabel,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -266,7 +271,6 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Checkbox / Radio
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: widget.allowMultiple
@@ -279,7 +283,7 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                 )
                     : Radio<bool>(
                   value: true,
-                  groupValue: selected,
+                  groupValue: selected ? true : null,
                   onChanged: (_) => _toggle(site),
                   activeColor: AppColors.primary,
                   materialTapTargetSize:
@@ -322,8 +326,7 @@ class _SitePickerSheetState extends State<SitePickerSheet> {
                               color: AppColors.primary.withOpacity(0.06),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                color:
-                                AppColors.primary.withOpacity(0.2),
+                                color: AppColors.primary.withOpacity(0.2),
                               ),
                             ),
                             child: Text(

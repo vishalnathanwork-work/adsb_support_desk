@@ -15,13 +15,14 @@ dependencies:
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.4.4
   firebase_messaging: ^15.1.3
-  # firebase_storage: ^12.3.2
-
   cloud_functions: ^5.1.3
+
+  # ─── Auth ───
+  google_sign_in: ^6.2.1
 
   # ─── Utilities ───
   url_launcher: ^6.3.0
-  intl: ^0.19.0
+  intl: any
   shared_preferences: ^2.3.2
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
@@ -29,12 +30,14 @@ dependencies:
 
   # ─── File & image picking ───
   image_picker: ^1.1.2
-  file_picker: ^8.1.6
+  file_picker: ^10.3.3
 
   open_filex: ^4.5.0
   flutter_pdfview: ^1.4.5
 
   firebase_storage: ^12.3.2
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
@@ -43,6 +46,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
+  generate: true
   assets:
     - assets/images/

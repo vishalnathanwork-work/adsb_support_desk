@@ -118,8 +118,22 @@ class UserService {
     required String clientName,
     required List<String> siteIds,
     required String adminEmail,
+    required String role,
   }) async {
     try {
+      if (role != 'owner' && role != 'operator') {
+        print('approveUser error: invalid role "$role"');
+        return false;
+      }
+      if (role == 'operator' && siteIds.length != 1) {
+        print('approveUser error: operator must have exactly 1 site');
+        return false;
+      }
+      if (role == 'owner' && siteIds.isEmpty) {
+        print('approveUser error: owner must have at least 1 site');
+        return false;
+      }
+
       final userDoc = await _col.doc(uid).get();
       final userEmail = userDoc.data()?['email'] as String? ?? '';
       final userName = userDoc.data()?['name'] as String? ?? 'User';
@@ -127,8 +141,10 @@ class UserService {
       await _col.doc(uid).update({
         'is_active': true,
         'approval_status': 'approved',
+        'role': role,
         'client_id': clientId,
         'client_name': clientName,
+        'company': clientName,
         'site_ids': siteIds,
         'approved_at': FieldValue.serverTimestamp(),
         'approved_by': adminEmail,
@@ -144,6 +160,7 @@ class UserService {
         print('onUserApproved notification failed: $e');
       }
 
+      print('✅ User approved: $userEmail as $role');
       return true;
     } catch (e) {
       print('approveUser error: $e');

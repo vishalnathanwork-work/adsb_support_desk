@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/client_model.dart';
 import '../../models/site_model.dart';
 import '../../services/owner_service.dart';
@@ -85,10 +86,11 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
   }
 
   Future<void> _openCreate() async {
+    final t = AppLocalizations.of(context)!;
     if (_allClients.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Add a client first before creating sites'),
+        SnackBar(
+          content: Text(t.noCompaniesAvailable),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -121,6 +123,7 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
   }
 
   Future<void> _delete(SiteModel site) async {
+    final t = AppLocalizations.of(context)!;
     final ticketCount = await _siteService.countTicketsForSite(site.id);
     final userCount = await _siteService.countUsersForSite(site.id);
 
@@ -134,8 +137,7 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Cannot delete: this site has ${blockers.join(" and ")} '
-                'linked to it.',
+            t.adminCannotDelete(blockers.join(" & ")),
           ),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 4),
@@ -147,20 +149,19 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete site?'),
+        title: Text(t.adminDeleteSite),
         content: Text(
-          'Delete "${site.name}" permanently?\n\n'
-              'This site has no tickets or users, so it is safe to delete.',
+          t.adminDeleteSiteMessage(site.name),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t.adminCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(t.adminDelete),
           ),
         ],
       ),
@@ -174,16 +175,16 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
 
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Site deleted'),
+        SnackBar(
+          content: Text(t.adminSiteDeleted),
           backgroundColor: AppColors.success,
         ),
       );
       _load();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Delete failed'),
+        SnackBar(
+          content: Text(t.adminDeleteFailed),
           backgroundColor: AppColors.error,
         ),
       );
@@ -192,12 +193,13 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final activeCount = _allSites.where((s) => s.isActive).length;
     final inactiveCount = _allSites.where((s) => !s.isActive).length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sites'),
+        title: Text(t.adminSitesTitle),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -206,7 +208,7 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
         onPressed: _openCreate,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('Add Site'),
+        label: Text(t.adminAddSite),
       ),
       body: Column(
         children: [
@@ -217,9 +219,9 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
             child: TextField(
               controller: _searchController,
               onChanged: (_) => setState(_applyFilters),
-              decoration: const InputDecoration(
-                hintText: 'Search sites by name or address...',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: t.adminSearchSites,
+                prefixIcon: const Icon(Icons.search),
                 filled: true,
               ),
             ),
@@ -234,7 +236,7 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  _clientChip(null, 'All Clients'),
+                  _clientChip(null, t.adminClients),
                   const SizedBox(width: 8),
                   ..._allClients.map((c) {
                     return Padding(
@@ -253,9 +255,9 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
               children: [
-                _statusChip('Active', 'active', activeCount),
+                _statusChip(t.adminActiveCount, 'active', activeCount),
                 const SizedBox(width: 8),
-                _statusChip('Inactive', 'inactive', inactiveCount),
+                _statusChip(t.adminInactiveCount, 'inactive', inactiveCount),
               ],
             ),
           ),
@@ -265,20 +267,20 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filtered.isEmpty
-                ? const EmptyState(
-              icon: Icons.location_off_outlined,
-              title: 'No sites found',
-              subtitle: 'Try changing your filters',
-            )
+                ? EmptyState(
+                    icon: Icons.location_off_outlined,
+                    title: t.adminNoSites,
+                    subtitle: t.ttTryChangeFilter,
+                  )
                 : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-                itemCount: _filtered.length,
-                itemBuilder: (context, i) =>
-                    _siteCard(_filtered[i]),
-              ),
-            ),
+                    onRefresh: _load,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                      itemCount: _filtered.length,
+                      itemBuilder: (context, i) =>
+                          _siteCard(_filtered[i], t),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -347,7 +349,7 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
     );
   }
 
-  Widget _siteCard(SiteModel s) {
+  Widget _siteCard(SiteModel s, AppLocalizations t) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
@@ -365,7 +367,6 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Name + status + delete
                 Row(
                   children: [
                     Expanded(
@@ -390,11 +391,11 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.errorLight,
                           borderRadius:
-                          BorderRadius.circular(AppRadii.pill),
+                              BorderRadius.circular(AppRadii.pill),
                         ),
-                        child: const Text(
-                          'INACTIVE',
-                          style: TextStyle(
+                        child: Text(
+                          t.adminInactiveCount.toUpperCase(),
+                          style: const TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: AppColors.error,
@@ -415,8 +416,6 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-
-                // Client badge
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -436,8 +435,6 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-
-                // Address
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -460,14 +457,12 @@ class _AdminSitesScreenState extends State<AdminSitesScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-
-                // Zones summary
                 if (s.zones.isNotEmpty)
                   _zonesRow(s)
                 else
-                  const Text(
-                    'No zones configured',
-                    style: TextStyle(
+                  Text(
+                    t.adminNoZonesConfigured,
+                    style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textTertiary,
                       fontStyle: FontStyle.italic,

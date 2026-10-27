@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/session_service.dart';
@@ -25,11 +26,13 @@ class _TechnicianDashboardState extends State<TechnicianDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return MainNavigation(
       user: widget.user,
       tabs: [
         NavTab(
-          label: 'Home',
+          label: t.tabHome,
           icon: Icons.home_outlined,
           page: StreamBuilder<List<Ticket>>(
             stream: _ticketService.streamTTQueueTickets(),
@@ -61,12 +64,17 @@ class _TechnicianDashboardState extends State<TechnicianDashboard> {
           ),
         ),
         NavTab(
-          label: 'Reviews',
+          label: t.tabVerify,
           icon: Icons.rate_review_outlined,
           page: TechnicianQueueScreen(user: widget.user),
         ),
         NavTab(
-          label: 'Profile',
+          label: t.tabHistory,
+          icon: Icons.history,
+          page: TechnicianHistoryScreen(user: widget.user),
+        ),
+        NavTab(
+          label: t.tabProfile,
           icon: Icons.person_outline,
           page: ClientProfileTab(
             user: widget.user,
@@ -102,13 +110,14 @@ class _TTAdvisorHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Technical Advisor')),
+      appBar: AppBar(title: Text(t.technicalAdvisor)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Welcome card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -122,34 +131,47 @@ class _TTAdvisorHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Technical Advisor',
-                      style: TextStyle(
-                          color: Colors.white70, fontSize: 13)),
+                  Text(
+                    t.technicalAdvisor,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(user.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    user.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text(user.company ?? 'Access Digital Sdn Bhd',
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 12)),
+                  Text(
+                    user.company ?? 'Access Digital Sdn Bhd',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-
-            // Stats
-            const Text('Your Stats',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              t.yourStats,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: _statCard(
-                    label: 'Pending',
+                    label: t.pending,
                     value: isLoading ? '…' : '$queueCount',
                     icon: Icons.pending_outlined,
                     color: AppColors.warning,
@@ -158,7 +180,7 @@ class _TTAdvisorHome extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _statCard(
-                    label: 'Handled',
+                    label: t.handled,
                     value: isLoading ? '…' : '$handledCount',
                     icon: Icons.check_circle_outline,
                     color: AppColors.success,
@@ -167,22 +189,37 @@ class _TTAdvisorHome extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-
-            // Quick actions
-            const Text('Quick Actions',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              t.quickActions,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 12),
             _actionTile(
               context,
               Icons.rate_review_outlined,
-              'Review Queue',
-              'Analyze escalated tickets',
+              t.reviewQueue,
+              t.reviewHint,
               AppColors.primary,
                   () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => TechnicianQueueScreen(user: user),
+                ),
+              ),
+            ),
+            _actionTile(
+              context,
+              Icons.history,
+              t.myHistory,
+              t.historyHint,
+              AppColors.accent,
+                  () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TechnicianHistoryScreen(user: user),
                 ),
               ),
             ),
@@ -210,15 +247,22 @@ class _TTAdvisorHome extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 12),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -259,20 +303,28 @@ class _TTAdvisorHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: AppColors.textSecondary),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),

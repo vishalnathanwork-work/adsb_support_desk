@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/admin_service.dart';
 
 class StatusOverrideSheet extends StatefulWidget {
@@ -23,23 +24,12 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
   String? _selected;
   bool _saving = false;
 
-  static const _statuses = [
-    {'key': 'pending', 'label': 'Pending Verification'},
-    {'key': 'verified', 'label': 'Verified (with TT)'},
-    {'key': 'pending_onsite', 'label': 'Pending On-Site'},
-    {'key': 'in_progress', 'label': 'On-Site In Progress'},
-    {'key': 'resolved', 'label': 'Resolved'},
-    {'key': 'closed', 'label': 'Closed'},
-    {'key': 'reopened', 'label': 'Reopened'},
-    {'key': 'cancelled', 'label': 'Cancelled'},
-  ];
-
   Future<void> _save() async {
     if (_selected == null) return;
 
-    // Warn if jumping from a closed state
     final isReopening =
-        (widget.currentStatus == 'closed' || widget.currentStatus == 'cancelled') &&
+        (widget.currentStatus == 'closed' ||
+            widget.currentStatus == 'cancelled') &&
             _selected != 'cancelled';
 
     final reason = await _askReason(isReopening: isReopening);
@@ -60,9 +50,10 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
     if (ok) {
       Navigator.pop(context, true);
     } else {
+      final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to override status'),
+        SnackBar(
+          content: Text(t.adminOverrideFailed),
           backgroundColor: AppColors.error,
         ),
       );
@@ -70,13 +61,16 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
   }
 
   Future<String?> _askReason({required bool isReopening}) async {
+    final t = AppLocalizations.of(context)!;
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(isReopening
-            ? 'Reopen a closed ticket?'
-            : 'Reason for override'),
+        title: Text(
+          isReopening
+              ? t.adminOverrideReopenTitle
+              : t.adminOverrideReasonTitle,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,16 +84,18 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.warning),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.warning_amber_outlined,
-                        color: AppColors.warning, size: 16),
-                    SizedBox(width: 6),
+                    const Icon(
+                      Icons.warning_amber_outlined,
+                      color: AppColors.warning,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'You are reopening a closed ticket. '
-                            'The client will be notified.',
-                        style: TextStyle(fontSize: 11),
+                        t.adminOverrideReopenWarn,
+                        style: const TextStyle(fontSize: 11),
                       ),
                     ),
                   ],
@@ -109,8 +105,8 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
               controller: controller,
               autofocus: true,
               maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Why is the status being changed manually?',
+              decoration: InputDecoration(
+                hintText: t.adminOverrideReasonHint,
               ),
             ),
           ],
@@ -118,156 +114,178 @@ class _StatusOverrideSheetState extends State<StatusOverrideSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(t.adminCancel),
           ),
           TextButton(
             onPressed: () {
               final text = controller.text.trim();
               if (text.isNotEmpty) Navigator.pop(context, text);
             },
-            child: const Text('Confirm'),
+            child: Text(t.confirmLabel),
           ),
         ],
       ),
     );
+  }
+
+  String _statusLabel(AppLocalizations t, String status) {
+    switch (status) {
+      case 'pending':
+        return t.statusPendingLabel;
+      case 'verified':
+        return t.statusVerifiedLabel;
+      case 'pending_onsite':
+        return t.statusPendingOnsiteLabel;
+      case 'in_progress':
+        return t.statusInProgressLabel;
+      case 'resolved':
+        return t.statusResolvedLabel;
+      case 'closed':
+        return t.statusClosedLabel;
+      case 'reopened':
+        return t.statusReopenedLabel;
+      case 'cancelled':
+        return t.statusCancelledLabel;
+      default:
+        return status;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final t = AppLocalizations.of(context)!;
+
+    const statusKeys = [
+      'pending',
+      'verified',
+      'pending_onsite',
+      'in_progress',
+      'resolved',
+      'closed',
+      'reopened',
+      'cancelled',
+    ];
+
+    return Padding(
+      // Keyboard-aware: pushes the sheet up instead of growing inner padding
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _handle(),
-          const SizedBox(height: 20),
-          const Text(
-            'Override Status',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Current: ${_statusLabel(widget.currentStatus)}',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 320),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _statuses.length,
-              itemBuilder: (context, i) {
-                final s = _statuses[i];
-                final key = s['key']!;
-                final isCurrent = key == widget.currentStatus;
-                final selected = _selected == key;
-                return RadioListTile<String>(
-                  value: key,
-                  groupValue: _selected,
-                  onChanged: isCurrent
-                      ? null
-                      : (v) => setState(() => _selected = v),
-                  title: Text(
-                    s['label']!,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isCurrent
-                          ? AppColors.textSecondary
-                          : AppColors.textPrimary,
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                  subtitle: isCurrent
-                      ? const Text('(current)',
-                      style: TextStyle(fontSize: 11))
-                      : null,
-                  activeColor: AppColors.primary,
-                  selected: selected,
-                );
-              },
+                  const SizedBox(height: 20),
+                  Text(
+                    t.adminOverrideTitle,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    t.adminOverrideCurrent(
+                      _statusLabel(t, widget.currentStatus),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Inline list — no nested scroll conflict
+                  ...statusKeys.map((key) {
+                    final isCurrent = key == widget.currentStatus;
+                    final selected = _selected == key;
+                    return RadioListTile<String>(
+                      value: key,
+                      groupValue: _selected,
+                      onChanged: isCurrent
+                          ? null
+                          : (v) => setState(() => _selected = v),
+                      title: Text(
+                        _statusLabel(t, key),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isCurrent
+                              ? AppColors.textSecondary
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      subtitle: isCurrent
+                          ? Text(
+                        t.adminCurrentSuffix,
+                        style: const TextStyle(fontSize: 11),
+                      )
+                          : null,
+                      activeColor: AppColors.primary,
+                      selected: selected,
+                    );
+                  }),
+
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(t.adminCancel),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed:
+                          (_selected == null || _saving) ? null : _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: _saving
+                              ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : Text(t.adminApplyOverride),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed:
-                  (_selected == null || _saving) ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
-                  )
-                      : const Text('Apply Override'),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
-
-  String _statusLabel(String s) {
-    switch (s) {
-      case 'pending':
-        return 'Pending';
-      case 'verified':
-        return 'Verified';
-      case 'pending_onsite':
-        return 'On-Site Queued';
-      case 'in_progress':
-        return 'In Progress';
-      case 'resolved':
-        return 'Resolved';
-      case 'closed':
-        return 'Closed';
-      case 'reopened':
-        return 'Reopened';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return s;
-    }
-  }
-
-  Widget _handle() => Center(
-    child: Container(
-      width: 40,
-      height: 4,
-      decoration: BoxDecoration(
-        color: AppColors.divider,
-        borderRadius: BorderRadius.circular(2),
-      ),
-    ),
-  );
 }

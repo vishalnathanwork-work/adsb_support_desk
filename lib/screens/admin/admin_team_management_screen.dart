@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/user_model.dart';
 import '../../services/user_service.dart';
 import '../../widgets/empty_state.dart';
@@ -55,8 +56,10 @@ class _AdminTeamManagementScreenState
     _filtered = _all.where((u) {
       final roleMatch = _filterRole == 'all' || u['role'] == _filterRole;
 
-      final isActive = u['is_active'] ?? true;
-      final statusMatch = _filterStatus == 'active' ? isActive : !isActive;
+      // Fix: actually apply the status filter
+      final isActive = u['is_active'] == true;
+      final statusMatch =
+      _filterStatus == 'active' ? isActive : !isActive;
 
       final name = (u['name'] ?? '').toString().toLowerCase();
       final email = (u['email'] ?? '').toString().toLowerCase();
@@ -97,6 +100,7 @@ class _AdminTeamManagementScreenState
   Future<void> _openActions(Map<String, dynamic> userData) async {
     final changed = await showModalBottomSheet<bool>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => UserActionsSheet(
         userData: userData,
@@ -109,13 +113,14 @@ class _AdminTeamManagementScreenState
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final activeCount = _all.where((u) => u['is_active'] == true).length;
     final inactiveCount =
         _all.where((u) => u['is_active'] == false).length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Team Management'),
+        title: Text(t.adminTeamsTitle),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -124,7 +129,7 @@ class _AdminTeamManagementScreenState
         onPressed: _openCreateForm,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.group_add),
-        label: const Text('Add Member'),
+        label: Text(t.adminAddMember),
       ),
       body: Column(
         children: [
@@ -140,9 +145,9 @@ class _AdminTeamManagementScreenState
             child: TextField(
               controller: _searchController,
               onChanged: (_) => setState(_applyFilters),
-              decoration: const InputDecoration(
-                hintText: 'Search team members...',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: t.adminSearchTeam,
+                prefixIcon: const Icon(Icons.search),
                 filled: true,
               ),
             ),
@@ -163,12 +168,12 @@ class _AdminTeamManagementScreenState
               AppSpacing.lg,
               AppSpacing.sm,
             ),
-            options: const [
-              FilterOption(label: 'All', value: 'all'),
-              FilterOption(label: 'ADSB Support', value: 'adsb'),
-              FilterOption(label: 'Tech Advisor', value: 'technician'),
-              FilterOption(label: 'On-Site', value: 'onsite'),
-              FilterOption(label: 'Admin', value: 'admin'),
+            options: [
+              FilterOption(label: t.notificationsTabAll, value: 'all'),
+              FilterOption(label: t.supportTeam, value: 'adsb'),
+              FilterOption(label: t.technicalAdvisor, value: 'technician'),
+              FilterOption(label: t.onSiteTechnician, value: 'onsite'),
+              FilterOption(label: t.administrator, value: 'admin'),
             ],
           ),
 
@@ -189,12 +194,12 @@ class _AdminTeamManagementScreenState
             ),
             options: [
               FilterOption(
-                label: 'Active',
+                label: t.adminActiveCount,
                 value: 'active',
                 count: activeCount,
               ),
               FilterOption(
-                label: 'Inactive',
+                label: t.adminInactiveCount,
                 value: 'inactive',
                 count: inactiveCount,
               ),
@@ -206,10 +211,10 @@ class _AdminTeamManagementScreenState
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filtered.isEmpty
-                ? const EmptyState(
+                ? EmptyState(
               icon: Icons.groups_outlined,
-              title: 'No team members',
-              subtitle: 'Tap + Add Member to create one',
+              title: t.adminNoTeam,
+              subtitle: t.adminNoTeamHint,
             )
                 : RefreshIndicator(
               onRefresh: _load,
@@ -222,7 +227,7 @@ class _AdminTeamManagementScreenState
                 ),
                 itemCount: _filtered.length,
                 itemBuilder: (context, i) =>
-                    _memberCard(_filtered[i]),
+                    _memberCard(_filtered[i], t),
               ),
             ),
           ),
@@ -231,7 +236,7 @@ class _AdminTeamManagementScreenState
     );
   }
 
-  Widget _memberCard(Map<String, dynamic> m) {
+  Widget _memberCard(Map<String, dynamic> m, AppLocalizations t) {
     final isActive = m['is_active'] ?? true;
     final role = m['role'] ?? 'adsb';
     final color = _roleColor(role);
@@ -299,9 +304,9 @@ class _AdminTeamManagementScreenState
                                 borderRadius:
                                 BorderRadius.circular(AppRadii.pill),
                               ),
-                              child: const Text(
-                                'INACTIVE',
-                                style: TextStyle(
+                              child: Text(
+                                t.adminInactiveCount.toUpperCase(),
+                                style: const TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.error,
@@ -320,7 +325,7 @@ class _AdminTeamManagementScreenState
                         ),
                       ),
                       const SizedBox(height: 6),
-                      _badge(_roleLabel(role), color),
+                      _badge(_roleLabel(role, t), color),
                     ],
                   ),
                 ),
@@ -357,16 +362,16 @@ class _AdminTeamManagementScreenState
     );
   }
 
-  String _roleLabel(String role) {
+  String _roleLabel(String role, AppLocalizations t) {
     switch (role) {
       case 'adsb':
-        return 'ADSB Support';
+        return t.supportTeam;
       case 'technician':
-        return 'Technical Advisor';
+        return t.technicalAdvisor;
       case 'onsite':
-        return 'On-Site Technician';
+        return t.onSiteTechnician;
       case 'admin':
-        return 'Administrator';
+        return t.administrator;
       default:
         return role;
     }

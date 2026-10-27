@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/client_model.dart';
 import '../../../services/owner_service.dart';
 
@@ -48,6 +49,7 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
   }
 
   Future<void> _save() async {
+    final t = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
@@ -74,8 +76,8 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to save client'),
+        SnackBar(
+          content: Text(t.clientSaveFailed),
           backgroundColor: AppColors.error,
         ),
       );
@@ -84,6 +86,8 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Container(
       padding: EdgeInsets.only(
         left: 20,
@@ -105,7 +109,7 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
               _handle(),
               const SizedBox(height: 20),
               Text(
-                isEditMode ? 'Edit Client' : 'Add Client',
+                isEditMode ? t.clientEditTitle : t.clientAddTitle,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -113,52 +117,52 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
               ),
               const SizedBox(height: 20),
 
-              _label('Company Name'),
+              _label(t.clientNameLabel),
               TextFormField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Parken Sdn Bhd',
-                  prefixIcon: Icon(Icons.business_outlined),
+                decoration: InputDecoration(
+                  hintText: t.clientNameHint,
+                  prefixIcon: const Icon(Icons.business_outlined),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Required'
+                    ? t.required
                     : null,
               ),
               const SizedBox(height: 14),
 
-              _label('Code'),
+              _label(t.clientCodeLabel),
               TextFormField(
                 controller: _codeController,
                 textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. PARKEN',
-                  prefixIcon: Icon(Icons.tag),
+                decoration: InputDecoration(
+                  hintText: t.clientCodeHint,
+                  prefixIcon: const Icon(Icons.tag),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Required'
+                    ? t.required
                     : null,
               ),
               const SizedBox(height: 14),
 
-              _label('Contact Email (Optional)'),
+              _label(t.clientEmailOptional),
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  hintText: 'admin@parken.com',
-                  prefixIcon: Icon(Icons.email_outlined),
+                decoration: InputDecoration(
+                  hintText: t.clientEmailHint,
+                  prefixIcon: const Icon(Icons.email_outlined),
                 ),
               ),
               const SizedBox(height: 14),
 
-              _label('Contact Phone (Optional)'),
+              _label(t.clientPhoneOptional),
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  hintText: '+60 12-345 6789',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                decoration: InputDecoration(
+                  hintText: t.clientPhoneHint,
+                  prefixIcon: const Icon(Icons.phone_outlined),
                 ),
               ),
               const SizedBox(height: 14),
@@ -168,14 +172,17 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
                 onChanged: (v) => setState(() => _isActive = v),
                 activeColor: AppColors.primary,
                 contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Active',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                title: Text(
+                  t.clientActiveLabel,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 subtitle: Text(
                   _isActive
-                      ? 'Client is visible in the system'
-                      : 'Client is hidden',
+                      ? t.clientActiveSubtitle
+                      : t.clientInactiveSubtitle,
                   style: const TextStyle(fontSize: 11),
                 ),
               ),
@@ -203,7 +210,9 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
                     ),
                   )
                       : Text(
-                    isEditMode ? 'Save Changes' : 'Create Client',
+                    isEditMode
+                        ? t.clientSaveChanges
+                        : t.clientCreate,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../config/app_config.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
+import '../../models/localized_preset.dart';
 import '../../models/site_model.dart';
 import '../../models/user_model.dart';
 import '../../services/chat_service.dart';
@@ -29,38 +31,44 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _chatService = ChatService();
 
   SiteModel? _selectedSite;
-  String? _selectedProductType;
-  String? _selectedProductIssue;
+  LocalizedPreset? _selectedProductType;
+  LocalizedPreset? _selectedProductIssue;
+
+  /// Selected lanes — stored as maps for Firestore:
+  /// { id, name, type, zone_id, zone_name }
+  final List<Map<String, String>> _selectedLanes = [];
 
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
   final _descriptionController = TextEditingController();
 
   List<SiteModel> _sites = [];
-  List<String> _productTypes = [];
-  Map<String, List<String>> _productIssuesMap = {};
+  List<LocalizedPreset> _productTypes = [];
+  Map<String, List<LocalizedPreset>> _productIssuesMap = {};
 
   final List<File> _selectedImages = [];
 
   bool _loading = true;
   bool _isSubmitting = false;
 
-  /// True when product type = "Others"
+  // ═══════════════════════════════════════════════
+  // "OTHER" DETECTION
+  // ═══════════════════════════════════════════════
+
   bool get _isOtherProductType {
-    final t = _selectedProductType;
-    if (t == null || t.isEmpty) return false;
-    final lower = t.toLowerCase();
+    final p = _selectedProductType;
+    if (p == null) return false;
+    final lower = p.en.toLowerCase();
     return lower == 'other' ||
         lower == 'others' ||
         lower.startsWith('other ') ||
         lower.startsWith('others ');
   }
 
-  /// True when the selected issue is "Other" style
   bool get _isOtherIssue {
     final issue = _selectedProductIssue;
-    if (issue == null || issue.isEmpty) return false;
-    final lower = issue.toLowerCase();
+    if (issue == null) return false;
+    final lower = issue.en.toLowerCase();
     return lower == 'other' ||
         lower == 'others' ||
         lower.startsWith('other ') ||
@@ -69,7 +77,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         lower.startsWith('others(');
   }
 
-  /// Description is required when product type OR issue is "Other"
   bool get _requiresDescription => _isOtherProductType || _isOtherIssue;
 
   @override
@@ -104,13 +111,46 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     });
   }
 
-  // ─────────────────────────────────────────
-  // IMAGES
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
+  // LANE SELECTION
+  // ═══════════════════════════════════════════════
+
+  bool _isLaneSelected(String laneId) {
+    return _selectedLanes.any((l) => l['id'] == laneId);
+  }
+
+  void _toggleLane({
+    required String laneId,
+    required String laneName,
+    required String laneType,
+    required String zoneId,
+    required String zoneName,
+  }) {
+    setState(() {
+      final existingIndex =
+      _selectedLanes.indexWhere((l) => l['id'] == laneId);
+      if (existingIndex >= 0) {
+        _selectedLanes.removeAt(existingIndex);
+      } else {
+        _selectedLanes.add({
+          'id': laneId,
+          'name': laneName,
+          'type': laneType,
+          'zone_id': zoneId,
+          'zone_name': zoneName,
+        });
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  // IMAGE PICKERS
+  // ═══════════════════════════════════════════════
 
   Future<void> _pickFromCamera() async {
+    final t = AppLocalizations.of(context)!;
     if (_selectedImages.length >= AppConfig.maxTicketImages) {
-      _showError('Maximum ${AppConfig.maxTicketImages} photos');
+      _showError(t.maxPhotosReached('${AppConfig.maxTicketImages}'));
       return;
     }
     final file = await _imageService.pickFromCamera();
@@ -120,10 +160,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    final remaining =
-        AppConfig.maxTicketImages - _selectedImages.length;
+    final t = AppLocalizations.of(context)!;
+    final remaining = AppConfig.maxTicketImages - _selectedImages.length;
     if (remaining <= 0) {
-      _showError('Maximum ${AppConfig.maxTicketImages} photos');
+      _showError(t.maxPhotosReached('${AppConfig.maxTicketImages}'));
       return;
     }
     final files = await _imageService.pickFromGallery(limit: remaining);
@@ -137,6 +177,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   void _showImageSourceSheet() {
+    final t = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -159,7 +200,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Take Photo'),
+              title: Text(t.takePhoto),
               onTap: () {
                 Navigator.pop(context);
                 _pickFromCamera();
@@ -167,7 +208,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from Gallery'),
+              title: Text(t.chooseFromGallery),
               onTap: () {
                 Navigator.pop(context);
                 _pickFromGallery();
@@ -180,58 +221,46 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
   // SUBMIT
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
 
   Future<void> _submit() async {
-    // Manual validations first (snackbar errors)
+    final t = AppLocalizations.of(context)!;
+
     if (_selectedSite == null) {
-      _showError('Please select a site location');
+      _showError(t.pleaseSelectSite);
+      return;
+    }
+    if (_selectedLanes.isEmpty) {
+      _showError('Please select at least one lane or zone');
       return;
     }
     if (_selectedProductType == null) {
-      _showError('Please select a product type');
+      _showError(t.pleaseSelectProductType);
       return;
     }
-
-    // Issue dropdown validation (hidden when product type = "Others")
-    if (!_isOtherProductType) {
-      if (_selectedProductIssue == null) {
-        _showError('Please select an issue');
-        return;
-      }
+    if (!_isOtherProductType && _selectedProductIssue == null) {
+      _showError(t.pleaseSelectIssue);
+      return;
     }
-
-    // Description required when "Other" in either product type or issue
     if (_requiresDescription &&
         _descriptionController.text.trim().isEmpty) {
-      _showError(
-        'Please describe the issue in the description field '
-            '(required when "Other" is selected)',
-      );
+      _showError(t.otherDescriptionRequired);
       return;
     }
-
-    // Form-level validate (phone, name, etc.)
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
 
-    // Build the final issue text
+    // Canonical (English) values saved to Firestore
     final String finalIssue;
-    if (_isOtherProductType) {
-      // Product type = Others → description becomes the issue
-      finalIssue = _descriptionController.text.trim();
-    } else if (_isOtherIssue) {
-      // Issue = Other → description becomes the issue
+    if (_isOtherProductType || _isOtherIssue) {
       finalIssue = _descriptionController.text.trim();
     } else {
-      // Normal issue
-      finalIssue = _selectedProductIssue!;
+      finalIssue = _selectedProductIssue!.canonical;
     }
 
-    // Description — only save when NOT used as the issue text
     final String finalDescription;
     if (_isOtherProductType || _isOtherIssue) {
       finalDescription = '';
@@ -246,8 +275,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       siteId: _selectedSite!.id,
       siteName: _selectedSite!.name,
       siteLocation: _selectedSite!.address,
-      lanes: const [],
-      productType: _selectedProductType!,
+      lanes: _selectedLanes,                     // ← pass selected lanes
+      productType: _selectedProductType!.canonical,
       productIssue: finalIssue,
       contactName: _contactNameController.text.trim(),
       contactPhone: _contactPhoneController.text.trim(),
@@ -258,11 +287,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     if (ticket == null) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      _showError('Failed to create ticket. Check your connection.');
+      _showError(t.somethingWentWrong);
       return;
     }
 
-    // Upload images
     if (_selectedImages.isNotEmpty) {
       final urls = await _imageService.uploadImages(
         files: _selectedImages,
@@ -276,8 +304,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           {'image_urls': urls},
         );
 
-        final updated =
-        await _ticketService.getTicketById(ticket.id);
+        final updated = await _ticketService.getTicketById(ticket.id);
         if (updated != null) {
           await _chatService.refreshSummaryImages(
             updated.copyWith(imageUrls: urls),
@@ -293,24 +320,25 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   void _showSuccessDialog(String ticketId) {
+    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.check_circle, color: AppColors.success),
-            SizedBox(width: 10),
-            Text('Ticket Submitted'),
+            const Icon(Icons.check_circle, color: AppColors.success),
+            const SizedBox(width: 10),
+            Text(t.ticketSubmitted),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Your ticket ID is:',
-              style: TextStyle(
+            Text(
+              t.ticketIdLabel,
+              style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
               ),
@@ -325,9 +353,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Our team will verify your issue and get back to you shortly.',
-              style: TextStyle(fontSize: 13),
+            Text(
+              t.ticketSubmittedMessage,
+              style: const TextStyle(fontSize: 13),
             ),
           ],
         ),
@@ -337,7 +365,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               Navigator.pop(context);
               Navigator.pop(context, true);
             },
-            child: const Text('OK'),
+            child: Text(t.ok),
           ),
         ],
       ),
@@ -350,14 +378,16 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
   // BUILD
-  // ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Ticket')),
+      appBar: AppBar(title: Text(t.newTicket)),
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -366,52 +396,65 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _sectionTitle('Location'),
-              _buildSiteDropdown(),
+              // ═══ LOCATION ═══
+              _sectionTitle(t.location),
+              _buildSiteDropdown(t),
+
+              // ═══ LANE PICKER (only shows after site selected) ═══
+              if (_selectedSite != null) ...[
+                const SizedBox(height: 16),
+                _buildLanePicker(t),
+              ],
+
               const SizedBox(height: 20),
 
-              _sectionTitle('Product Details'),
-              _buildProductTypeDropdown(),
-              // Hide issue dropdown when product type = "Others"
+              // ═══ PRODUCT DETAILS ═══
+              _sectionTitle(t.productDetails),
+              _buildProductTypeDropdown(t),
               if (!_isOtherProductType) ...[
                 const SizedBox(height: 12),
-                _buildProductIssueDropdown(),
+                _buildProductIssueDropdown(t),
               ],
+
               const SizedBox(height: 20),
 
-              _sectionTitle('Photos (Optional)'),
-              _buildImageSection(),
+              // ═══ PHOTOS ═══
+              _sectionTitle(t.photosOptional),
+              _buildImageSection(t),
+
               const SizedBox(height: 20),
 
-              _sectionTitle('Contact Person'),
+              // ═══ CONTACT ═══
+              _sectionTitle(t.contactPerson),
               _buildTextInput(
                 controller: _contactNameController,
-                label: 'Name',
+                label: t.nameLabel,
                 icon: Icons.person_outline,
                 validator: (v) =>
-                v == null || v.isEmpty ? 'Required' : null,
+                v == null || v.isEmpty ? t.required : null,
               ),
               const SizedBox(height: 12),
               _buildTextInput(
                 controller: _contactPhoneController,
-                label: 'Phone',
+                label: t.phoneLabel,
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
                 validator: (v) =>
-                v == null || v.isEmpty ? 'Required' : null,
+                v == null || v.isEmpty ? t.required : null,
               ),
               const SizedBox(height: 20),
 
+              // ═══ DESCRIPTION ═══
               _sectionTitle(
                 _requiresDescription
-                    ? 'Issue Description (Required)'
-                    : 'Issue Description (Optional)',
+                    ? t.issueDescriptionRequired
+                    : t.issueDescriptionOptional,
               ),
-              _buildTextArea(),
-              const SizedBox(height: 32),
+              _buildTextArea(t),
 
+              const SizedBox(height: 32),
               PrimaryButton(
-                label: 'Submit Ticket',
+                label: t.submitTicket,
                 onPressed: _isSubmitting ? null : _submit,
                 isLoading: _isSubmitting,
               ),
@@ -441,19 +484,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   // SITE DROPDOWN
   // ═══════════════════════════════════════════════
 
-  Widget _buildSiteDropdown() {
+  Widget _buildSiteDropdown(AppLocalizations t) {
     if (_sites.isEmpty) {
-      return _emptyMessage(
-        'No sites assigned to your account. Contact admin.',
-      );
+      return _emptyMessage(t.noSitesAssigned);
     }
 
     return DropdownButtonFormField<String>(
       initialValue: _selectedSite?.id,
       isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select site',
-        prefixIcon: Icon(
+      decoration: InputDecoration(
+        hintText: t.selectSite,
+        prefixIcon: const Icon(
           Icons.location_on_outlined,
           color: AppColors.textSecondary,
         ),
@@ -468,9 +509,237 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         if (id == null) return;
         setState(() {
           _selectedSite = _sites.firstWhere((s) => s.id == id);
+          _selectedLanes.clear();   // ← clear lanes when site changes
         });
       },
-      validator: (v) => v == null ? 'Required' : null,
+      validator: (v) => v == null ? t.required : null,
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // LANE PICKER
+  // ═══════════════════════════════════════════════
+
+  Widget _buildLanePicker(AppLocalizations t) {
+    final site = _selectedSite!;
+
+    if (site.zones.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.warning.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.warning),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.warning_amber_outlined, color: AppColors.warning),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'This site has no zones or lanes configured. Contact admin.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.place_outlined,
+                size: 16,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Select affected area(s)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              if (_selectedLanes.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${_selectedLanes.length} selected',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tap a zone to expand. Select one or more lanes.',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ═══ ZONES (expanded tiles) ═══
+          ...site.zones.map((zone) => _zoneSection(zone, site)),
+        ],
+      ),
+    );
+  }
+
+  Widget _zoneSection(Zone zone, SiteModel site) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: zone.lanes.any((l) => _isLaneSelected(l.id)),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  zone.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${zone.lanes.length} lane${zone.lanes.length == 1 ? "" : "s"}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          children: [
+            if (zone.lanes.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No lanes in this zone',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textTertiary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: zone.lanes.map((lane) {
+                  final isSelected = _isLaneSelected(lane.id);
+                  final color = lane.isEntry
+                      ? AppColors.success
+                      : AppColors.warning;
+
+                  return InkWell(
+                    onTap: () => _toggleLane(
+                      laneId: lane.id,
+                      laneName: lane.name,
+                      laneType: lane.type,
+                      zoneId: zone.id,
+                      zoneName: zone.name,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary.withOpacity(0.12)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : color.withOpacity(0.4),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            lane.isEntry ? Icons.login : Icons.logout,
+                            size: 14,
+                            color: color,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            lane.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                          if (isSelected) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.check_circle,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -478,79 +747,96 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   // PRODUCT TYPE DROPDOWN
   // ═══════════════════════════════════════════════
 
-  Widget _buildProductTypeDropdown() {
+  Widget _buildProductTypeDropdown(AppLocalizations t) {
     if (_productTypes.isEmpty) {
-      return _emptyMessage('No product types loaded. Contact admin.');
+      return _emptyMessage(t.noProductTypesLoaded);
     }
 
+    final locale = Localizations.localeOf(context);
+
     return DropdownButtonFormField<String>(
-      initialValue: _selectedProductType,
+      initialValue: _selectedProductType?.key,
       isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select product type',
-        prefixIcon: Icon(
+      decoration: InputDecoration(
+        hintText: t.selectProductType,
+        prefixIcon: const Icon(
           Icons.build_outlined,
           color: AppColors.textSecondary,
         ),
       ),
-      items: _productTypes
-          .map((p) => DropdownMenuItem(
-        value: p,
-        child: Text(p, overflow: TextOverflow.ellipsis),
-      ))
-          .toList(),
-      onChanged: (v) {
+      items: _productTypes.map((p) {
+        return DropdownMenuItem(
+          value: p.key,
+          child: Text(
+            p.localized(locale),
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged: (key) {
+        if (key == null) return;
         setState(() {
-          _selectedProductType = v;
+          _selectedProductType =
+              _productTypes.firstWhere((p) => p.key == key);
           _selectedProductIssue = null;
         });
       },
-      validator: (v) => v == null ? 'Required' : null,
+      validator: (v) => v == null ? t.required : null,
     );
   }
 
-  Widget _buildProductIssueDropdown() {
+  // ═══════════════════════════════════════════════
+  // PRODUCT ISSUE DROPDOWN
+  // ═══════════════════════════════════════════════
+
+  Widget _buildProductIssueDropdown(AppLocalizations t) {
     if (_selectedProductType == null) {
-      return _disabledHint('Select a product type first');
+      return _disabledHint(t.selectProductTypeFirst);
     }
 
-    final issues = _productIssuesMap[_selectedProductType] ?? [];
+    final issues =
+        _productIssuesMap[_selectedProductType!.key] ?? <LocalizedPreset>[];
     if (issues.isEmpty) {
-      return _emptyMessage(
-        'No issues configured for "$_selectedProductType". Contact admin.',
-      );
+      return _emptyMessage(t.noIssuesConfigured);
     }
+
+    final locale = Localizations.localeOf(context);
 
     return DropdownButtonFormField<String>(
-      initialValue: _selectedProductIssue,
+      initialValue: _selectedProductIssue?.key,
       isExpanded: true,
-      decoration: const InputDecoration(
-        hintText: 'Select issue',
-        prefixIcon: Icon(
+      decoration: InputDecoration(
+        hintText: t.selectIssue,
+        prefixIcon: const Icon(
           Icons.report_problem_outlined,
           color: AppColors.textSecondary,
         ),
       ),
-      items: issues
-          .map((p) => DropdownMenuItem(
-        value: p,
-        child: Text(p, overflow: TextOverflow.ellipsis),
-      ))
-          .toList(),
-      onChanged: (v) {
+      items: issues.map((p) {
+        return DropdownMenuItem(
+          value: p.key,
+          child: Text(
+            p.localized(locale),
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged: (key) {
+        if (key == null) return;
         setState(() {
-          _selectedProductIssue = v;
+          _selectedProductIssue =
+              issues.firstWhere((p) => p.key == key);
         });
       },
-      validator: (v) => v == null ? 'Required' : null,
+      validator: (v) => v == null ? t.required : null,
     );
   }
 
   // ═══════════════════════════════════════════════
-  // IMAGES
+  // IMAGE SECTION
   // ═══════════════════════════════════════════════
 
-  Widget _buildImageSection() {
+  Widget _buildImageSection(AppLocalizations t) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -562,7 +848,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${_selectedImages.length} / ${AppConfig.maxTicketImages} photos',
+            t.photosCount(
+              '${_selectedImages.length}',
+              '${AppConfig.maxTicketImages}',
+            ),
             style: const TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,
@@ -594,15 +883,18 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AppColors.divider),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.add_a_photo_outlined,
-                        color: AppColors.primary, size: 20),
-                    SizedBox(width: 8),
+                    const Icon(
+                      Icons.add_a_photo_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      'Add Photo',
-                      style: TextStyle(
+                      t.addPhoto,
+                      style: const TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -697,11 +989,13 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             color: AppColors.textSecondary,
           ),
           const SizedBox(width: 10),
-          Text(
-            message,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -727,19 +1021,18 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  Widget _buildTextArea() {
+  Widget _buildTextArea(AppLocalizations t) {
     return TextFormField(
       controller: _descriptionController,
       maxLines: 4,
       decoration: InputDecoration(
         hintText: _requiresDescription
-            ? 'Describe the issue in detail — required'
-            : 'Describe the issue in detail (optional)',
+            ? t.issueDescriptionHintRequired
+            : t.issueDescriptionHintOptional,
       ),
       validator: (v) {
-        if (_requiresDescription &&
-            (v == null || v.trim().isEmpty)) {
-          return 'Please describe the issue';
+        if (_requiresDescription && (v == null || v.trim().isEmpty)) {
+          return t.pleaseDescribeIssue;
         }
         return null;
       },

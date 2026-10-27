@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../utils/date_formatter.dart';
@@ -19,7 +20,7 @@ class TicketHistoryScreen extends StatefulWidget {
     super.key,
     required this.user,
     required this.loader,
-    this.title = 'History',
+    this.title = '',
   });
 
   @override
@@ -87,9 +88,12 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final displayTitle = widget.title.isNotEmpty ? widget.title : t.tabHistory;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(displayTitle),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -104,9 +108,9 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
                 TextField(
                   controller: _searchController,
                   onChanged: (_) => setState(_applyFilters),
-                  decoration: const InputDecoration(
-                    hintText: 'Search by ID, product, site, or client...',
-                    prefixIcon: Icon(Icons.search),
+                  decoration: InputDecoration(
+                    hintText: '${t.adminSearchUsers.split(" ")[0]} ID, product, site...',
+                    prefixIcon: const Icon(Icons.search),
                     filled: true,
                   ),
                 ),
@@ -119,11 +123,11 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
                       _applyFilters();
                     });
                   },
-                  options: const [
-                    FilterOption(label: 'All', value: 'all'),
-                    FilterOption(label: 'Open', value: 'open'),
-                    FilterOption(label: 'Closed', value: 'closed'),
-                    FilterOption(label: 'Cancelled', value: 'cancelled'),
+                  options: [
+                    FilterOption(label: t.notificationsTabAll, value: 'all'),
+                    FilterOption(label: t.open, value: 'open'),
+                    FilterOption(label: t.statusClosedLabel, value: 'closed'),
+                    FilterOption(label: t.statusCancelledLabel, value: 'cancelled'),
                   ],
                 ),
               ],
@@ -133,20 +137,20 @@ class _TicketHistoryScreenState extends State<TicketHistoryScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filtered.isEmpty
-                ? const EmptyState(
-              icon: Icons.history,
-              title: 'No tickets found',
-              subtitle: 'Try changing your filters',
-            )
+                ? EmptyState(
+                    icon: Icons.history,
+                    title: t.ttNoTickets,
+                    subtitle: t.ttTryChangeFilter,
+                  )
                 : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _filtered.length,
-                itemBuilder: (context, i) =>
-                    _ticketCard(_filtered[i]),
-              ),
-            ),
+                    onRefresh: _load,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _filtered.length,
+                      itemBuilder: (context, i) =>
+                          _ticketCard(_filtered[i]),
+                    ),
+                  ),
           ),
         ],
       ),

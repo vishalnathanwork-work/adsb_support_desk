@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
@@ -39,11 +40,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return MainNavigation(
       user: widget.user,
       tabs: [
         NavTab(
-          label: 'Home',
+          label: t.tabHome,
           icon: Icons.home_outlined,
           page: StreamBuilder<List<Ticket>>(
             stream: _ticketService.streamAllTickets(),
@@ -62,22 +65,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         NavTab(
-          label: 'Tickets',
+          label: t.tabTickets,
           icon: Icons.confirmation_number_outlined,
           page: AdminAllTicketsScreen(user: widget.user),
         ),
         NavTab(
-          label: 'Teams',
+          label: t.tabTeams,
           icon: Icons.groups_outlined,
           page: AdminTeamManagementScreen(user: widget.user),
         ),
         NavTab(
-          label: 'Alerts',
+          label: t.tabAlerts,
           icon: Icons.notifications_outlined,
           page: NotificationsScreen(user: widget.user),
         ),
         NavTab(
-          label: 'Profile',
+          label: t.tabProfile,
           icon: Icons.person_outline,
           page: OwnerProfileTab(
             user: widget.user,
@@ -104,6 +107,8 @@ class _AdminHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     final total = tickets.length;
     final open = tickets
         .where((t) =>
@@ -114,7 +119,7 @@ class _AdminHome extends StatelessWidget {
         .length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Dashboard')),
+      appBar: AppBar(title: Text(t.administrator)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -130,22 +135,33 @@ class _AdminHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Administrator',
-                      style: TextStyle(
-                          color: Colors.white70, fontSize: 13)),
+                  Text(
+                    t.administrator,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(user.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    user.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            const Text('Key Metrics',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              t.keyMetrics,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 12),
             if (isLoading)
               const Center(child: CircularProgressIndicator())
@@ -155,12 +171,12 @@ class _AdminHome extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _kpiCard('Total', '$total',
+                        child: _kpiCard(t.total, '$total',
                             Icons.list_alt_outlined, AppColors.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _kpiCard('Open', '$open',
+                        child: _kpiCard(t.open, '$open',
                             Icons.pending_outlined, AppColors.warning),
                       ),
                     ],
@@ -168,15 +184,19 @@ class _AdminHome extends StatelessWidget {
                 ],
               ),
             const SizedBox(height: 24),
-            const Text('Management',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              t.management,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 12),
             _actionTile(
               context,
               Icons.confirmation_number_outlined,
-              'All Tickets',
-              'View and manage all tickets',
+              t.allTicketsTitle,
+              t.allTicketsHint,
               AppColors.primary,
                   () => Navigator.push(
                 context,
@@ -188,8 +208,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.groups_outlined,
-              'Team Management',
-              'ADSB Members + TT Members',
+              t.teamManagement,
+              t.teamManagementHint,
               AppColors.accent,
                   () => Navigator.push(
                 context,
@@ -201,8 +221,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.people_outline,
-              'User Management',
-              'Owner and Operators',
+              t.userManagement,
+              t.userManagementHint,
               AppColors.warning,
                   () => Navigator.push(
                 context,
@@ -214,8 +234,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.business_outlined,
-              'Clients',
-              'Manage companies',
+              t.clientsTitle,
+              t.clientsHint,
               const Color(0xFF00838F),
                   () => Navigator.push(
                 context,
@@ -227,8 +247,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.location_city_outlined,
-              'Sites (Locations)',
-              'Manage sites',
+              t.sitesTitle,
+              t.sitesHint,
               const Color(0xFF6A1B9A),
                   () => Navigator.push(
                 context,
@@ -240,8 +260,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.tune,
-              'System Presets',
-              'Product types, Issues',
+              t.systemPresets,
+              t.systemPresetsHint,
               AppColors.textSecondary,
                   () => Navigator.push(
                 context,
@@ -253,8 +273,8 @@ class _AdminHome extends StatelessWidget {
             _actionTile(
               context,
               Icons.analytics_outlined,
-              'Analytics & Reporting',
-              'System metrics and reports',
+              t.analytics,
+              t.analyticsHint,
               AppColors.success,
                   () => Navigator.push(
                 context,
@@ -282,15 +302,22 @@ class _AdminHome extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 26),
           const SizedBox(height: 12),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -331,20 +358,28 @@ class _AdminHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: AppColors.textSecondary),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),

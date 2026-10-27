@@ -8,8 +8,8 @@ class RoleRouter {
       UserModel user, {
         bool replace = false,
       }) {
-    // ─── Pending approval gate ───
-    if (user.isPendingApproval) {
+    // ─── Not active = pending approval (checked directly) ───
+    if (!user.isActive) {
       final route = MaterialPageRoute(
         builder: (_) => PendingApprovalScreen(user: user),
       );

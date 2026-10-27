@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
@@ -22,45 +23,47 @@ class AdsbDashboard extends StatefulWidget {
 class _AdsbDashboardState extends State<AdsbDashboard> {
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return MainNavigation(
       user: widget.user,
       tabs: [
         NavTab(
-          label: 'Home',
+          label: t.tabHome,
           icon: Icons.home_outlined,
           page: _AdsbHome(user: widget.user),
         ),
         NavTab(
-          label: 'Verify',
+          label: t.tabVerify,
           icon: Icons.support_agent,
           page: AdsbQueueScreen(user: widget.user),
         ),
         NavTab(
-          label: 'On-Site',
+          label: t.tabOnSite,
           icon: Icons.location_on_outlined,
           page: OnsiteQueueScreen(user: widget.user),
         ),
         NavTab(
-          label: 'History',
+          label: t.tabHistory,
           icon: Icons.history,
           page: TicketHistoryScreen(
             user: widget.user,
-            title: 'Ticket History',
+            title: t.tabHistory,
             loader: () => TicketService().getAllTickets(),
           ),
         ),
         NavTab(
-          label: 'Profile',
+          label: t.tabProfile,
           icon: Icons.person_outline,
           page: OwnerProfileTab(
             user: widget.user,
             onLogout: () async {
-            await SessionService().clear();
-            await AuthService().logout();   // ← now stops listener too
-            if (context.mounted) {
-            Navigator.of(context)
-                .pushNamedAndRemoveUntil('/login', (r) => false);
-            }
+              await SessionService().clear();
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/login', (r) => false);
+              }
             },
           ),
         ),
@@ -77,10 +80,11 @@ class _AdsbHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = TicketService();
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ADSB Support Team'),
+        title: Text(t.supportTeam),
       ),
       body: SafeArea(
         child: StreamBuilder<Map<String, int>>(
@@ -92,7 +96,6 @@ class _AdsbHome extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // ─── Welcome card ───
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -104,9 +107,9 @@ class _AdsbHome extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Support Team',
-                        style: TextStyle(
+                      Text(
+                        t.supportTeam,
+                        style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
                         ),
@@ -123,15 +126,12 @@ class _AdsbHome extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // ─── Live stat cards ───
                 Row(
                   children: [
                     Expanded(
                       child: _statCard(
-                        'To Verify',
+                        t.toVerify,
                         '$verifyCount',
                         AppColors.warning,
                       ),
@@ -139,30 +139,27 @@ class _AdsbHome extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _statCard(
-                        'On-Site',
+                        t.onSiteQueued,
                         '$onsiteCount',
                         AppColors.accent,
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
-
-                const Text(
-                  'Quick Actions',
-                  style: TextStyle(
+                Text(
+                  t.quickActions,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 _actionTile(
                   context,
                   Icons.support_agent,
-                  'Verification Queue',
-                  'Chat or call clients',
+                  t.verificationQueue,
+                  t.ticketDetailsHint,
                   AppColors.primary,
                       () => Navigator.push(
                     context,
@@ -174,8 +171,8 @@ class _AdsbHome extends StatelessWidget {
                 _actionTile(
                   context,
                   Icons.location_on_outlined,
-                  'On-Site Jobs',
-                  'Jobs assigned for physical visit',
+                  t.onSiteJobs,
+                  t.jobsVisitHint,
                   AppColors.accent,
                       () => Navigator.push(
                     context,
@@ -194,10 +191,7 @@ class _AdsbHome extends StatelessWidget {
 
   Widget _statCard(String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        vertical: 16,
-        horizontal: 12,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),

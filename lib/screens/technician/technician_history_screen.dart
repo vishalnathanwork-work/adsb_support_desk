@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -49,9 +50,11 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ticket History'),
+        title: Text(t.myHistory),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -59,18 +62,18 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _tickets.isEmpty
-          ? const EmptyState(
-        icon: Icons.history,
-        title: 'No history yet',
-        subtitle: 'Tickets you advise will appear here',
-      )
+          ? EmptyState(
+              icon: Icons.history,
+              title: t.notificationsEmpty,
+              subtitle: t.historyHint,
+            )
           : RefreshIndicator(
         onRefresh: _load,
         child: ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: _tickets.length,
           itemBuilder: (context, i) {
-            final t = _tickets[i];
+            final ticket = _tickets[i];
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(14),
@@ -86,7 +89,7 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          t.id,
+                          ticket.id,
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -94,14 +97,15 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
                           ),
                         ),
                       ),
-                      TTStatusBadge(status: t.status),                    ],
+                      TTStatusBadge(status: ticket.status),
+                    ],
                   ),
                   const SizedBox(height: 8),
-                  Text(t.productType,
+                  Text(ticket.productType,
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 3),
-                  Text(t.productIssue,
+                  Text(ticket.productIssue,
                       style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary)),
@@ -115,14 +119,14 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Your Advice:',
-                            style: TextStyle(
+                        Text(t.onsiteAdviceTitle,
+                            style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.primary)),
                         const SizedBox(height: 4),
                         Text(
-                          t.rootCause ?? '—',
+                          ticket.rootCause ?? '—',
                           style: const TextStyle(fontSize: 12),
                         ),
                       ],
@@ -136,13 +140,13 @@ class _TechnicianHistoryScreenState extends State<TechnicianHistoryScreen> {
                           color: AppColors.textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
-                        child: Text(t.siteName,
+                        child: Text(ticket.siteName,
                             style: const TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary)),
                       ),
                       Text(
-                        DateFormatter.relative(t.updatedAt),
+                        DateFormatter.relative(ticket.updatedAt),
                         style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary),

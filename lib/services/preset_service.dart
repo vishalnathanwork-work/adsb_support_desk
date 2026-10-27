@@ -1,30 +1,38 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/localized_preset.dart';
 
 class PresetService {
   final _col = FirebaseFirestore.instance.collection('presets');
 
-  // ─── READ ───
+  // ═══════════════════════════════════════════════════════════
+  // READ
+  // ═══════════════════════════════════════════════════════════
 
-  Future<List<String>> getProductTypes() => _getStringList('product_types');
-  Future<List<String>> getRootCauses() => _getStringList('root_causes');
-  Future<List<String>> getSolutions() => _getStringList('solutions');
+  Future<List<LocalizedPreset>> getProductTypes() async {
+    try {
+      final doc = await _col.doc('product_types').get();
+      if (!doc.exists) return [];
+      final items = doc.data()!['items'];
+      if (items is! List) return [];
+      return items.map(LocalizedPreset.fromJson).toList();
+    } catch (e) {
+      print('getProductTypes error: $e');
+      return [];
+    }
+  }
 
-  /// Returns a map of product type → list of issues.
-  Future<Map<String, List<String>>> getProductIssues() async {
+  Future<Map<String, List<LocalizedPreset>>> getProductIssues() async {
     try {
       final doc = await _col.doc('product_issues').get();
       if (!doc.exists) return {};
-
-      final data = doc.data()!;
-      final items = data['items'];
-
+      final items = doc.data()!['items'];
       if (items is! Map) return {};
 
-      final result = <String, List<String>>{};
-      items.forEach((key, value) {
+      final result = <String, List<LocalizedPreset>>{};
+      items.forEach((productKey, value) {
         if (value is List) {
-          result[key.toString()] =
-              value.map((e) => e.toString()).toList();
+          result[productKey.toString()] =
+              value.map(LocalizedPreset.fromJson).toList();
         }
       });
       return result;
@@ -34,48 +42,58 @@ class PresetService {
     }
   }
 
-  Future<List<Map<String, String>>> getSites() async {
+  Future<List<LocalizedPreset>> getRootCauses() async {
     try {
-      final doc = await _col.doc('sites').get();
+      final doc = await _col.doc('root_causes').get();
       if (!doc.exists) return [];
-      final data = doc.data()!;
-      final items = data['items'] as List? ?? [];
-      return items
-          .map((e) => Map<String, String>.from(e as Map))
-          .toList();
+      final items = doc.data()!['items'];
+      if (items is! List) return [];
+      return items.map(LocalizedPreset.fromJson).toList();
     } catch (e) {
-      print('getSites error: $e');
+      print('getRootCauses error: $e');
       return [];
     }
   }
 
-  Future<List<String>> _getStringList(String docId) async {
+  Future<List<LocalizedPreset>> getSolutions() async {
     try {
-      final doc = await _col.doc(docId).get();
+      final doc = await _col.doc('solutions').get();
       if (!doc.exists) return [];
-      final data = doc.data()!;
-      return List<String>.from(data['items'] ?? []);
+      final items = doc.data()!['items'];
+      if (items is! List) return [];
+      return items.map(LocalizedPreset.fromJson).toList();
     } catch (e) {
-      print('_getStringList($docId) error: $e');
+      print('getSolutions error: $e');
       return [];
     }
   }
 
-  // ─── WRITE ───
+  // ═══════════════════════════════════════════════════════════
+  // WRITE
+  // ═══════════════════════════════════════════════════════════
 
-  Future<bool> saveProductTypes(List<String> items) =>
-      _saveStringList('product_types', items);
-
-  Future<bool> saveRootCauses(List<String> items) =>
-      _saveStringList('root_causes', items);
-
-  Future<bool> saveSolutions(List<String> items) =>
-      _saveStringList('solutions', items);
-
-  Future<bool> saveProductIssues(Map<String, List<String>> items) async {
+  Future<bool> saveProductTypes(List<LocalizedPreset> items) async {
     try {
+      await _col.doc('product_types').set({
+        'items': items.map((i) => i.toJson()).toList(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      print('saveProductTypes error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> saveProductIssues(
+      Map<String, List<LocalizedPreset>> items) async {
+    try {
+      final map = <String, dynamic>{};
+      items.forEach((key, list) {
+        map[key] = list.map((i) => i.toJson()).toList();
+      });
       await _col.doc('product_issues').set({
-        'items': items,
+        'items': map,
         'updated_at': FieldValue.serverTimestamp(),
       });
       return true;
@@ -85,28 +103,28 @@ class PresetService {
     }
   }
 
-  Future<bool> saveSites(List<Map<String, String>> items) async {
+  Future<bool> saveRootCauses(List<LocalizedPreset> items) async {
     try {
-      await _col.doc('sites').set({
-        'items': items,
+      await _col.doc('root_causes').set({
+        'items': items.map((i) => i.toJson()).toList(),
         'updated_at': FieldValue.serverTimestamp(),
       });
       return true;
     } catch (e) {
-      print('saveSites error: $e');
+      print('saveRootCauses error: $e');
       return false;
     }
   }
 
-  Future<bool> _saveStringList(String docId, List<String> items) async {
+  Future<bool> saveSolutions(List<LocalizedPreset> items) async {
     try {
-      await _col.doc(docId).set({
-        'items': items,
+      await _col.doc('solutions').set({
+        'items': items.map((i) => i.toJson()).toList(),
         'updated_at': FieldValue.serverTimestamp(),
       });
       return true;
     } catch (e) {
-      print('_saveStringList($docId) error: $e');
+      print('saveSolutions error: $e');
       return false;
     }
   }

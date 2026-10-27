@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/client_model.dart';
 import '../../models/site_model.dart';
 import '../../models/user_model.dart';
@@ -38,8 +39,7 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
       client = await _clientService.getClientById(widget.user.clientId!);
     }
 
-    final sites =
-    await _siteService.getSitesForUser(widget.user.siteIds);
+    final sites = await _siteService.getSitesForUser(widget.user.siteIds);
 
     if (!mounted) return;
     setState(() {
@@ -51,9 +51,11 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Sites'),
+        title: Text(t.sitesTitle),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -65,24 +67,26 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (_client != null) _clientHeader(_client!),
+            if (_client != null) _clientHeader(_client!, t),
             const SizedBox(height: 16),
             if (_sites.isEmpty)
-              const EmptyState(
+              EmptyState(
                 icon: Icons.location_off_outlined,
-                title: 'No sites assigned',
-                subtitle: 'Contact admin to assign sites to you',
+                title: t.noSitesAssigned,
+                subtitle: t.contactAdmin,
               )
             else ...[
               Text(
-                '${_sites.length} site${_sites.length == 1 ? '' : 's'} under your care',
+                _sites.length == 1
+                    ? t.sitesCountOne
+                    : t.sitesCountMany('${_sites.length}'),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 12),
-              ..._sites.map(_siteCard),
+              ..._sites.map((s) => _siteCard(s, t)),
             ],
           ],
         ),
@@ -90,7 +94,7 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
     );
   }
 
-  Widget _clientHeader(ClientModel client) {
+  Widget _clientHeader(ClientModel client, AppLocalizations t) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -102,9 +106,9 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'You are managing:',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+          Text(
+            t.operatorManaging,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
           const SizedBox(height: 4),
           Text(
@@ -127,7 +131,7 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
     );
   }
 
-  Widget _siteCard(SiteModel site) {
+  Widget _siteCard(SiteModel site, AppLocalizations t) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -136,7 +140,8 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
         border: Border.all(color: AppColors.divider),
       ),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        tilePadding:
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
         leading: Container(
           width: 42,
@@ -165,11 +170,11 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
           const Divider(height: 1),
           const SizedBox(height: 8),
           if (site.zones.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(8),
+            Padding(
+              padding: const EdgeInsets.all(8),
               child: Text(
-                'No zones or lanes configured for this site.',
-                style: TextStyle(
+                t.operatorNoZonesConfigured,
+                style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
                 ),
@@ -179,7 +184,10 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${site.totalLanes} lane${site.totalLanes == 1 ? "" : "s"} across ${site.zoneCount} zone${site.zoneCount == 1 ? "" : "s"}',
+                t.operatorLanesAcrossZones(
+                  '${site.totalLanes}',
+                  '${site.zoneCount}',
+                ),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -204,9 +212,9 @@ class _OperatorSitesScreenState extends State<OperatorSitesScreen> {
                     ),
                     const SizedBox(height: 6),
                     if (zone.lanes.isEmpty)
-                      const Text(
-                        'No lanes in this zone',
-                        style: TextStyle(
+                      Text(
+                        t.operatorNoLanesInZone,
+                        style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.textTertiary,
                           fontStyle: FontStyle.italic,

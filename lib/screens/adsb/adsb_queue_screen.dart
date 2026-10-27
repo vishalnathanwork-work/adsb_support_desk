@@ -6,6 +6,7 @@ import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/filter_chip_row.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/status_badge.dart';
 import 'adsb_ticket_action_screen.dart';
 
@@ -24,8 +25,10 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;   // ← moved UP
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Verification Queue')),
+      appBar: AppBar(title: Text(t.adsbQueue)),   // ← removed const
       body: StreamBuilder<List<Ticket>>(
         stream: _service.streamActiveTicketsForAdsb(),
         builder: (context, snapshot) {
@@ -35,24 +38,24 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                   !snapshot.hasData;
 
           final pendingCount =
-              allTickets.where((t) => t.status == 'pending').length;
+              allTickets.where((ticket) => ticket.status == 'pending').length;
           final withTtCount =
-              allTickets.where((t) => t.status == 'verified').length;
+              allTickets.where((ticket) => ticket.status == 'verified').length;
           final onsiteCount = allTickets
-              .where((t) =>
-          t.status == 'pending_onsite' ||
-              t.status == 'in_progress')
+              .where((ticket) =>
+          ticket.status == 'pending_onsite' ||
+              ticket.status == 'in_progress')
               .length;
 
           final filtered = switch (_filter) {
             'pending' =>
-                allTickets.where((t) => t.status == 'pending').toList(),
+                allTickets.where((ticket) => ticket.status == 'pending').toList(),
             'with_tt' =>
-                allTickets.where((t) => t.status == 'verified').toList(),
+                allTickets.where((ticket) => ticket.status == 'verified').toList(),
             'onsite' => allTickets
-                .where((t) =>
-            t.status == 'pending_onsite' ||
-                t.status == 'in_progress')
+                .where((ticket) =>
+            ticket.status == 'pending_onsite' ||
+                ticket.status == 'in_progress')
                 .toList(),
             _ => allTickets,
           };
@@ -63,19 +66,22 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 selectedValue: _filter,
                 onSelected: (v) => setState(() => _filter = v),
                 options: [
-                  const FilterOption(label: 'All Active', value: 'active'),
                   FilterOption(
-                    label: 'Pending',
+                    label: t.adsbAllActive,   // ← removed const
+                    value: 'active',
+                  ),
+                  FilterOption(
+                    label: t.adsbPending,
                     value: 'pending',
                     count: pendingCount,
                   ),
                   FilterOption(
-                    label: 'With TT',
+                    label: t.adsbWithTt,
                     value: 'with_tt',
                     count: withTtCount,
                   ),
                   FilterOption(
-                    label: 'On-Site',
+                    label: t.adsbOnSite,
                     value: 'onsite',
                     count: onsiteCount,
                   ),
@@ -85,16 +91,16 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : filtered.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
                   icon: Icons.check_circle_outline,
-                  title: 'All caught up!',
-                  subtitle: 'No tickets in this view',
+                  title: t.allCaughtUp,        // ← removed const
+                  subtitle: t.noTicketsInView, // ← removed const
                 )
                     : ListView.builder(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   itemCount: filtered.length,
                   itemBuilder: (context, i) =>
-                      _ticketTile(filtered[i]),
+                      _ticketTile(filtered[i], t),
                 ),
               ),
             ],
@@ -104,7 +110,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
     );
   }
 
-  Widget _ticketTile(Ticket t) {
+  Widget _ticketTile(Ticket ticket, AppLocalizations t) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Material(
@@ -115,7 +121,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => AdsbTicketActionScreen(
-                  ticketId: t.id,
+                  ticketId: ticket.id,
                   user: widget.user,
                 ),
               ),
@@ -136,7 +142,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        t.id,
+                        ticket.id,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -145,12 +151,12 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                         ),
                       ),
                     ),
-                    StatusBadge(status: t.status),
+                    StatusBadge(status: ticket.status),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  t.productType,
+                  ticket.productType,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -159,7 +165,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  t.productIssue,
+                  ticket.productIssue,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -179,7 +185,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        '${t.createdByName} · ${t.siteName}',
+                        '${ticket.createdByName} · ${ticket.siteName}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -189,7 +195,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      DateFormatter.relative(t.createdAt),
+                      DateFormatter.relative(ticket.createdAt),
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.textTertiary,

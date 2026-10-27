@@ -1,15 +1,16 @@
 class UserModel {
-  final String email;
+  final String email;         // internal only — <username>@adsb.local
+  final String username;      // what the user types to log in
   final String name;
   final String role; // owner | operator | adsb | technician | onsite | admin
   final String? phone;
   final String? company;
+  final String? remark;
   final bool isActive;
   final List<String> siteIds;
   final String? clientId;
   final String? clientName;
 
-  // ─── Approval workflow ───
   /// 'pending' | 'approved' | 'rejected'
   final String approvalStatus;
 
@@ -19,10 +20,12 @@ class UserModel {
 
   UserModel({
     required this.email,
+    this.username = '',
     required this.name,
     required this.role,
     this.phone,
     this.company,
+    this.remark,
     this.isActive = true,
     this.siteIds = const [],
     this.clientId,
@@ -35,10 +38,12 @@ class UserModel {
 
   Map<String, dynamic> toJson() => {
     'email': email,
+    'username': username,
     'name': name,
     'role': role,
     'phone': phone,
     'company': company,
+    'remark': remark,
     'is_active': isActive,
     'site_ids': siteIds,
     'client_id': clientId,
@@ -51,10 +56,12 @@ class UserModel {
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
     email: json['email'] ?? '',
+    username: json['username'] ?? '',
     name: json['name'] ?? '',
     role: json['role'] ?? 'owner',
     phone: json['phone'],
-    company: json['company'],
+    company: json['company'] ?? json['remark'],
+    remark: json['remark'],
     isActive: json['is_active'] ?? true,
     siteIds: _parseStringList(json['site_ids']),
     clientId: json['client_id'],
@@ -76,7 +83,6 @@ class UserModel {
     if (value == null) return null;
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value);
-    // Firestore Timestamp
     try {
       return (value as dynamic).toDate() as DateTime;
     } catch (_) {

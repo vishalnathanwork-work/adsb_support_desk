@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
@@ -24,11 +25,13 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return MainNavigation(
       user: widget.user,
       tabs: [
         NavTab(
-          label: 'Home',
+          label: t.tabHome,
           icon: Icons.home_outlined,
           page: OwnerHomeTab(
             user: widget.user,
@@ -36,26 +39,27 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           ),
         ),
         NavTab(
-          label: 'Tickets',
+          label: t.tabTickets,
           icon: Icons.confirmation_number_outlined,
           page: OwnerTicketsTab(user: widget.user),
         ),
         NavTab(
-          label: 'Alerts',
+          label: t.tabAlerts,
           icon: Icons.notifications_outlined,
           page: NotificationsScreen(user: widget.user),
         ),
         NavTab(
-          label: 'History',
+          label: t.tabHistory,
           icon: Icons.history,
           page: TicketHistoryScreen(
             user: widget.user,
-            title: 'Ticket History',
-            loader: () => TicketService().getHistoryForSites(widget.user.siteIds),
+            title: t.tabHistory,
+            loader: () =>
+                TicketService().getHistoryForSites(widget.user.siteIds),
           ),
         ),
         NavTab(
-          label: 'Profile',
+          label: t.tabProfile,
           icon: Icons.person_outline,
           page: OwnerProfileTab(
             user: widget.user,

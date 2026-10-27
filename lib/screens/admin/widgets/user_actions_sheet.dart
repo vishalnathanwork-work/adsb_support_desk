@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/user_service.dart';
 
 class UserActionsSheet extends StatefulWidget {
@@ -20,11 +22,13 @@ class UserActionsSheet extends StatefulWidget {
 
 class _UserActionsSheetState extends State<UserActionsSheet> {
   final _service = UserService();
+  final _authService = AuthService();
   bool _isWorking = false;
 
   String get _uid => widget.userData['uid'] as String;
   String get _name => widget.userData['name'] ?? 'User';
   String get _email => widget.userData['email'] ?? '';
+  String get _username => (widget.userData['username'] ?? '').toString();
   bool get _isActive => widget.userData['is_active'] ?? true;
   String get _role => widget.userData['role'] ?? 'owner';
 
@@ -35,30 +39,28 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
   // ═══════════════════════════════════════════════
 
   Future<void> _toggleActive() async {
+    final t = AppLocalizations.of(context)!;
+
     if (_isSelf) {
-      _snack('You cannot deactivate your own account', AppColors.error);
+      _snack(t.adminSelfDeactivateBlocked, AppColors.error);
       return;
     }
 
     if (_isActive) {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Deactivate user?'),
-          content: Text(
-            '$_name will no longer be able to log in.',
-          ),
+        builder: (dialogContext) => AlertDialog(
+          title: Text(t.adminDeactivateTitle),
+          content: Text(t.adminDeactivateMessage(_name)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(t.adminCancel),
             ),
             TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.error,
-              ),
-              child: const Text('Deactivate'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              child: Text(t.adminDeactivate),
             ),
           ],
         ),
@@ -66,6 +68,7 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
       if (ok != true) return;
     }
 
+    if (!mounted) return;
     setState(() => _isWorking = true);
 
     final success = _isActive
@@ -77,31 +80,202 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
 
     if (success) {
       _snack(
-        _isActive ? 'User deactivated' : 'User reactivated',
+        _isActive ? t.adminUserDeactivated : t.adminUserReactivated,
         AppColors.success,
       );
       Navigator.pop(context, true);
     } else {
-      _snack('Action failed', AppColors.error);
+      _snack(t.adminActionFailed, AppColors.error);
     }
   }
 
   // ═══════════════════════════════════════════════
-  // DELETE USER (hard delete)
+  // RESET PASSWORD
   // ═══════════════════════════════════════════════
 
-  Future<void> _deleteUser() async {
-    final confirm = await showDialog<bool>(
+  Future<void> _showResetPasswordDialog() async {
+    String newPassword = '';
+    bool obscure = true;
+    bool isSubmitting = false;
+    String? errorText;
+
+    await showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete user?'),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              setDialogState(() => errorText = null);
+
+              if (newPassword.length < 6) {
+                setDialogState(
+                        () => errorText = 'Minimum 6 characters required');
+                return;
+              }
+
+              setDialogState(() => isSubmitting = true);
+
+              final result = await _authService.adminResetPassword(
+                targetUid: _uid,
+                newPassword: newPassword,
+              );
+
+              if (!context.mounted) return;
+
+              setDialogState(() => isSubmitting = false);
+
+              if (!result.success) {
+                setDialogState(
+                        () => errorText = result.message ?? 'Reset failed');
+                return;
+              }
+
+              Navigator.pop(dialogContext);
+
+              if (!mounted) return;
+              await _showPasswordResultDialog(newPassword);
+            }
+
+            return AlertDialog(
+              title: Text('Reset Password for $_name'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Set a new password. Call the user and give it to them.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    autofocus: true,
+                    obscureText: obscure,
+                    onChanged: (v) {
+                      newPassword = v;
+                      if (errorText != null) {
+                        setDialogState(() => errorText = null);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'New Password',
+                      hintText: 'Minimum 6 characters',
+                      errorText: errorText,
+                      prefixIcon:
+                      const Icon(Icons.lock_outline, size: 20),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscure
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 18,
+                        ),
+                        onPressed: () =>
+                            setDialogState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: isSubmitting ? null : submit,
+                  child: isSubmitting
+                      ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : const Text('Reset Password'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showPasswordResultDialog(String newPassword) async {
+    await showDialog<void>(
+      context: context,
+      builder: (resultContext) => AlertDialog(
+        title: const Text('Password Reset'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$_name will be removed from the system and can no longer '
-                  'log in.',
+              'New password for $_name:',
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: SelectableText(
+                newPassword,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'monospace',
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Call the user and give them this password. '
+                  'They can change it later from their Profile.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(resultContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context, true);
+  }
+
+  // ═══════════════════════════════════════════════
+  // DELETE USER
+  // ═══════════════════════════════════════════════
+
+  Future<void> _deleteUser() async {
+    final t = AppLocalizations.of(context)!;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t.adminDeleteUserTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              t.adminDeleteUserMessage(_name),
               style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 10),
@@ -112,41 +286,34 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.warning),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline,
-                      size: 16, color: AppColors.warning),
-                  SizedBox(width: 6),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Their Firebase Auth account must be deleted '
-                          'separately in Firebase Console → Authentication.',
-                      style: TextStyle(fontSize: 11),
+                      t.adminDeleteUserWarning,
+                      style: const TextStyle(fontSize: 11),
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'This cannot be undone.',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.error,
               ),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t.adminCancel),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(t.adminDelete),
           ),
         ],
       ),
@@ -154,23 +321,48 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
 
     if (confirm != true) return;
 
+    if (!mounted) return;
     setState(() => _isWorking = true);
     final success = await _service.deleteUser(_uid);
     if (!mounted) return;
     setState(() => _isWorking = false);
 
     if (success) {
-      _snack('User deleted', AppColors.warning);
+      _snack(t.adminUserDeleted, AppColors.warning);
       Navigator.pop(context, true);
     } else {
-      _snack('Delete failed', AppColors.error);
+      _snack(t.adminDeleteFailed, AppColors.error);
     }
   }
 
+  // ═══════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════
+
   void _snack(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: color),
     );
+  }
+
+  String _roleLabel(AppLocalizations t, String role) {
+    switch (role) {
+      case 'owner':
+        return t.siteOwner;
+      case 'operator':
+        return t.siteOperator;
+      case 'adsb':
+        return t.supportTeam;
+      case 'technician':
+        return t.technicalAdvisor;
+      case 'onsite':
+        return t.onSiteTechnician;
+      case 'admin':
+        return t.administrator;
+      default:
+        return role;
+    }
   }
 
   // ═══════════════════════════════════════════════
@@ -179,178 +371,218 @@ class _UserActionsSheetState extends State<UserActionsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(top: 20, bottom: 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
+    final t = AppLocalizations.of(context)!;
+    final displayUsername =
+    _username.isNotEmpty ? _username : _email.split('@').first;
 
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: AppColors.primary.withOpacity(0.15),
-                  child: Text(
-                    _name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+    return Padding(
+      // Keyboard-aware: push sheet up instead of growing inner padding
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 20, bottom: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor:
+                          AppColors.primary.withOpacity(0.15),
+                          child: Text(
+                            _name.substring(0, 1).toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'Username: $displayUsername',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (_isActive
+                                ? AppColors.success
+                                : AppColors.error)
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _isActive
+                                ? t.adminActiveBadge
+                                : t.adminInactiveBadge,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: _isActive
+                                  ? AppColors.success
+                                  : AppColors.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(height: 1),
+
+                  ListTile(
+                    enabled: !_isWorking,
+                    leading: const Icon(
+                      Icons.lock_reset,
                       color: AppColors.primary,
                     ),
+                    title: const Text(
+                      'Reset Password',
+                      style: TextStyle(color: AppColors.primary),
+                    ),
+                    subtitle: const Text(
+                      'Set a new password and tell the user by phone',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    onTap: _isWorking ? null : _showResetPasswordDialog,
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+
+                  const Divider(height: 1),
+
+                  ListTile(
+                    enabled: !_isWorking && !_isSelf,
+                    leading: Icon(
+                      _isActive ? Icons.block : Icons.check_circle_outline,
+                      color: _isSelf
+                          ? AppColors.textSecondary
+                          : (_isActive
+                          ? AppColors.error
+                          : AppColors.success),
+                    ),
+                    title: Text(
+                      _isActive ? t.adminDeactivateBtn : t.adminReactivate,
+                      style: TextStyle(
+                        color: _isSelf
+                            ? AppColors.textSecondary
+                            : (_isActive
+                            ? AppColors.error
+                            : AppColors.success),
+                      ),
+                    ),
+                    subtitle: _isSelf
+                        ? Text(
+                      t.adminSelfEditBlocked,
+                      style: const TextStyle(fontSize: 11),
+                    )
+                        : Text(
+                      _isActive
+                          ? t.adminWillNotSignIn
+                          : t.adminWillRegainAccess,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onTap: _isWorking ? null : _toggleActive,
                   ),
-                ),
-                Text(
-                  _email,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+
+                  const Divider(height: 1),
+
+                  ListTile(
+                    enabled: !_isWorking && !_isSelf,
+                    leading: Icon(
+                      Icons.delete_forever,
+                      color: _isSelf
+                          ? AppColors.textSecondary
+                          : AppColors.error,
+                    ),
+                    title: Text(
+                      t.adminDeleteBtn,
+                      style: TextStyle(
+                        color: _isSelf
+                            ? AppColors.textSecondary
+                            : AppColors.error,
+                      ),
+                    ),
+                    subtitle: Text(
+                      _isSelf
+                          ? t.adminSelfDeleteBlocked
+                          : t.adminDeleteFirestoreOnly,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onTap: _isWorking || _isSelf ? null : _deleteUser,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (_isActive ? AppColors.success : AppColors.error)
-                        .withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _isActive ? 'ACTIVE' : 'INACTIVE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color:
-                      _isActive ? AppColors.success : AppColors.error,
+
+                  const Divider(height: 1),
+
+                  ListTile(
+                    leading: const Icon(
+                      Icons.info_outline,
+                      color: AppColors.textSecondary,
+                    ),
+                    title: Text(t.adminRoleLabel),
+                    subtitle: Text(
+                      _roleLabel(t, _role),
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
 
-          const SizedBox(height: 20),
-          const Divider(height: 1),
+                  const Divider(height: 1),
 
-          // ─── Toggle active ───
-          ListTile(
-            enabled: !_isWorking && !_isSelf,
-            leading: Icon(
-              _isActive ? Icons.block : Icons.check_circle_outline,
-              color: _isSelf
-                  ? AppColors.textSecondary
-                  : (_isActive ? AppColors.error : AppColors.success),
-            ),
-            title: Text(
-              _isActive ? 'Deactivate Account' : 'Reactivate Account',
-              style: TextStyle(
-                color: _isSelf
-                    ? AppColors.textSecondary
-                    : (_isActive ? AppColors.error : AppColors.success),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.close,
+                      color: AppColors.textSecondary,
+                    ),
+                    title: Text(t.closeLabel),
+                    onTap: () => Navigator.pop(context, false),
+                  ),
+                ],
               ),
             ),
-            subtitle: _isSelf
-                ? const Text('You cannot modify your own account',
-                style: TextStyle(fontSize: 11))
-                : Text(
-              _isActive
-                  ? 'User will not be able to sign in'
-                  : 'User will regain access',
-              style: const TextStyle(fontSize: 11),
-            ),
-            onTap: _isWorking ? null : _toggleActive,
           ),
-
-          const Divider(height: 1),
-
-          // ─── Delete user ───
-          ListTile(
-            enabled: !_isWorking && !_isSelf,
-            leading: Icon(
-              Icons.delete_forever,
-              color: _isSelf ? AppColors.textSecondary : AppColors.error,
-            ),
-            title: Text(
-              'Delete Permanently',
-              style: TextStyle(
-                color: _isSelf ? AppColors.textSecondary : AppColors.error,
-              ),
-            ),
-            subtitle: Text(
-              _isSelf
-                  ? 'You cannot delete your own account'
-                  : 'Removes from Firestore (Auth cleanup manual)',
-              style: const TextStyle(fontSize: 11),
-            ),
-            onTap: _isWorking || _isSelf ? null : _deleteUser,
-          ),
-
-          const Divider(height: 1),
-
-          // ─── Info tile ───
-          ListTile(
-            leading: const Icon(Icons.info_outline,
-                color: AppColors.textSecondary),
-            title: const Text('Role'),
-            subtitle: Text(_roleLabel(_role),
-                style: const TextStyle(fontSize: 12)),
-          ),
-
-          const Divider(height: 1),
-
-          ListTile(
-            leading: const Icon(Icons.close, color: AppColors.textSecondary),
-            title: const Text('Close'),
-            onTap: () => Navigator.pop(context, false),
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  String _roleLabel(String role) {
-    switch (role) {
-      case 'owner':
-        return 'Site Owner';
-      case 'operator':
-        return 'Site Operator';
-      case 'adsb':
-        return 'ADSB Support Team';
-      case 'technician':
-        return 'Technical Advisor';
-      case 'onsite':
-        return 'On-Site Technician';
-      case 'admin':
-        return 'Administrator';
-      default:
-        return role;
-    }
   }
 }

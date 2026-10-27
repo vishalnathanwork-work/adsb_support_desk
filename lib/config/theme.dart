@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -85,8 +86,18 @@ class AppTheme {
     final base = ThemeData.light(useMaterial3: true);
 
     return base.copyWith(
-      scaffoldBackgroundColor: AppColors.background,
+      // ⭐ CHANGED — was AppColors.background, now transparent
+      // so the global background image (from app.dart builder) shows through.
+      scaffoldBackgroundColor: Colors.transparent,
       primaryColor: AppColors.primary,
+
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
+
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
@@ -141,7 +152,9 @@ class AppTheme {
         ),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surface,
+        // ⭐ CHANGED — semi-transparent so the background image
+        // shows faintly behind the app bar.
+        backgroundColor: Colors.white.withOpacity(0.92),
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0.5,

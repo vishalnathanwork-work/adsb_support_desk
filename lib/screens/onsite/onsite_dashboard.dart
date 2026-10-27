@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
@@ -23,18 +24,21 @@ class _OnsiteDashboardState extends State<OnsiteDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return MainNavigation(
       user: widget.user,
       tabs: [
         NavTab(
-          label: 'Home',
+          label: t.tabHome,
           icon: Icons.home_outlined,
           page: StreamBuilder<List<Ticket>>(
             stream: _ticketService.streamOnsiteQueue(),
             builder: (context, snapshot) {
               final tickets = snapshot.data ?? [];
-              final unclaimed =
-                  tickets.where((t) => t.status == 'pending_onsite').length;
+              final unclaimed = tickets
+                  .where((t) => t.status == 'pending_onsite')
+                  .length;
               final myJobs = tickets
                   .where((t) =>
               t.status == 'in_progress' &&
@@ -50,12 +54,12 @@ class _OnsiteDashboardState extends State<OnsiteDashboard> {
           ),
         ),
         NavTab(
-          label: 'Jobs',
+          label: t.tabOnSite,
           icon: Icons.work_outline,
           page: OnsiteQueueScreen(user: widget.user),
         ),
         NavTab(
-          label: 'Profile',
+          label: t.tabProfile,
           icon: Icons.person_outline,
           page: ClientProfileTab(
             user: widget.user,
@@ -89,8 +93,10 @@ class _OnsiteHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('On-Site Team')),
+      appBar: AppBar(title: Text(t.tabOnSite)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -106,28 +112,39 @@ class _OnsiteHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('On-Site Technician',
-                      style: TextStyle(
-                          color: Colors.white70, fontSize: 13)),
+                  Text(
+                    t.onSiteTechnician,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(user.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    user.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            const Text('Your Stats',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              t.yourStats,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: _statCard(
-                    label: 'Unclaimed',
+                    label: t.unclaimed,
                     value: '$unclaimedCount',
                     color: AppColors.warning,
                     icon: Icons.inbox_outlined,
@@ -136,7 +153,7 @@ class _OnsiteHome extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _statCard(
-                    label: 'My Jobs',
+                    label: t.myJobs,
                     value: '$myJobsCount',
                     color: AppColors.primary,
                     icon: Icons.work_outline,
@@ -145,11 +162,19 @@ class _OnsiteHome extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
+            Text(
+              t.quickActions,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
             _actionTile(
               context,
               Icons.work_outline,
-              'My Jobs',
-              'View claimed and in-progress jobs',
+              t.myJobsTitle,
+              t.viewJobsHint,
               AppColors.primary,
                   () => Navigator.push(
                 context,
@@ -182,13 +207,22 @@ class _OnsiteHome extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 12),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -228,17 +262,28 @@ class _OnsiteHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),

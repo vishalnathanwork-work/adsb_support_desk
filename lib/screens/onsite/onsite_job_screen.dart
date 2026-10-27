@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/chat_service.dart';
@@ -65,29 +66,29 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
   }
 
   Future<void> _load() async {
-    final t = await _service.getTicketById(widget.ticketId);
+    final ticket = await _service.getTicketById(widget.ticketId);
     if (!mounted) return;
     setState(() {
-      _ticket = t;
+      _ticket = ticket;
       _isLoading = false;
     });
   }
 
   Future<void> _claimJob() async {
+    final t = AppLocalizations.of(context)!;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Claim this job?'),
-        content: const Text(
-            'You will be assigned to this on-site job. The timer starts now.'),
+        title: Text(t.onsiteClaimTitle),
+        content: Text(t.onsiteClaimMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t.adminCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Claim'),
+            child: Text(t.onsiteClaim),
           ),
         ],
       ),
@@ -105,8 +106,8 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     if (!mounted) return;
     setState(() => _isWorking = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Job claimed. Good luck!'),
+      SnackBar(
+        content: Text(t.onsiteClaimed),
         backgroundColor: AppColors.success,
       ),
     );
@@ -125,6 +126,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
   }
 
   Future<void> _openResolutionForm() async {
+    final t = AppLocalizations.of(context)!;
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -173,8 +175,8 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
     setState(() => _isWorking = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Job completed. Awaiting owner confirmation.'),
+      SnackBar(
+        content: Text(t.onsiteJobCompletedSuccess),
         backgroundColor: AppColors.success,
       ),
     );
@@ -183,79 +185,87 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
     if (_ticket == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Job')),
-        body: const Center(child: Text('Ticket not found')),
+        appBar: AppBar(title: Text(t.onsiteJobNotFoundTitle)),
+        body: Center(child: Text(t.onsiteTicketNotFound)),
       );
     }
 
-    final t = _ticket!;
-    final isUnclaimed = t.status == 'pending_onsite';
-    final isMine = t.assignedTo == widget.user.email;
-    final isInProgress = t.status == 'in_progress' && isMine;
+    final ticket = _ticket!;
+    final isUnclaimed = ticket.status == 'pending_onsite';
+    final isMine = ticket.assignedTo == widget.user.email;
+    final isInProgress = ticket.status == 'in_progress' && isMine;
 
     return Scaffold(
-      appBar: AppBar(title: Text(t.id)),
+      appBar: AppBar(title: Text(ticket.id)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             _card(
-              title: 'Job Details',
+              title: t.onsiteJobDetails,
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Status',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary),
+                        t.statusLabel,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
-                    StatusBadge(status: t.status),
+                    StatusBadge(status: ticket.status),
                   ],
                 ),
                 const SizedBox(height: 10),
-                _row('Client', t.createdByName),
-                _row('Contact', '${t.contactName} — ${t.contactPhone}'),
-                _row('Site', t.siteName),
-                _row('Address', t.siteLocation),
-                _row('Lanes', t.lanesSummary),
-                _row('Product', t.productType),
-                if (t.productIssue.isNotEmpty)
-                  _row('Issue', t.productIssue),
-                if (t.description.isNotEmpty)
-                  _row('Description', t.description),
+                _row(t.clientLabel, ticket.createdByName),
+                _row(
+                  t.contactLabel,
+                  '${ticket.contactName} — ${ticket.contactPhone}',
+                ),
+                _row(t.onsiteSiteLabel, ticket.siteName),
+                _row(t.onsiteAddressLabel, ticket.siteLocation),
+                _row(t.adminLanesLabel, ticket.lanesSummary),
+                _row(t.adminProductLabel, ticket.productType),
+                if (ticket.productIssue.isNotEmpty)
+                  _row(t.adminIssueLabel, ticket.productIssue),
+                if (ticket.description.isNotEmpty)
+                  _row(t.descriptionLabel, ticket.description),
               ],
             ),
 
-            if (t.rootCause != null || t.solutionApplied != null) ...[
+            if (ticket.rootCause != null ||
+                ticket.solutionApplied != null) ...[
               const SizedBox(height: 16),
               _card(
-                title: 'Advice from Technical Advisor',
+                title: t.onsiteAdviceTitle,
                 children: [
-                  if (t.rootCause != null)
-                    _row('Root Cause Hint', t.rootCause!),
-                  if (t.solutionApplied != null &&
-                      t.solutionApplied != 'Pending on-site work')
-                    _row('Solution Hint', t.solutionApplied!),
+                  if (ticket.rootCause != null)
+                    _row(t.onsiteRootCauseHint, ticket.rootCause!),
+                  if (ticket.solutionApplied != null &&
+                      ticket.solutionApplied != 'Pending on-site work')
+                    _row(t.onsiteSolutionHint, ticket.solutionApplied!),
                 ],
               ),
             ],
 
-            if (t.imageUrls.isNotEmpty) ...[
+            if (ticket.imageUrls.isNotEmpty) ...[
               const SizedBox(height: 16),
               _card(
-                title: 'Reported Photo Evidence',
+                title: t.onsiteReportedPhotos,
                 children: [
-                  _imageGrid(t.imageUrls),
+                  _imageGrid(ticket.imageUrls),
                 ],
               ),
             ],
@@ -270,17 +280,21 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                   color: AppColors.warning.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: AppColors.warning.withOpacity(0.3)),
+                    color: AppColors.warning.withOpacity(0.3),
+                  ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline,
-                        color: AppColors.warning, size: 20),
-                    SizedBox(width: 10),
+                    const Icon(
+                      Icons.info_outline,
+                      color: AppColors.warning,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'This job has not been claimed yet. Claim it to start.',
-                        style: TextStyle(fontSize: 12),
+                        t.onsiteJobUnclaimedBanner,
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
                   ],
@@ -298,12 +312,17 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
                   )
-                      : const Text('Claim Job',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600)),
+                      : Text(
+                    t.onsiteClaimJob,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.warning,
                     foregroundColor: Colors.white,
@@ -314,16 +333,15 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 ),
               ),
             ] else if (isInProgress) ...[
-              // ─── Chat button (top) ───
               SizedBox(
                 height: 52,
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _openChat,
                   icon: const Icon(Icons.chat_bubble_outline),
-                  label: const Text(
-                    'Open Chat',
-                    style: TextStyle(
+                  label: Text(
+                    t.openChat,
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -338,8 +356,6 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // ─── Job Completed button ───
               SizedBox(
                 height: 52,
                 width: double.infinity,
@@ -351,11 +367,13 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
                   )
-                      : const Text(
-                    'Job Completed',
-                    style: TextStyle(
+                      : Text(
+                    t.onsiteJobCompleted,
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -383,7 +401,8 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'This job is ${t.statusDisplay.toLowerCase()}.',
+                        t.onsiteJobStatus(
+                            ticket.statusDisplay.toLowerCase()),
                         style: const TextStyle(fontSize: 13),
                       ),
                     ),
@@ -450,11 +469,14 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
+          ),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -470,14 +492,22 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
         children: [
           SizedBox(
             width: 100,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -486,7 +516,7 @@ class _OnsiteJobScreenState extends State<OnsiteJobScreen> {
 }
 
 // ═══════════════════════════════════════════════
-// RESOLUTION SHEET (unchanged — keep the existing one below)
+// RESOLUTION SHEET — overflow-safe
 // ═══════════════════════════════════════════════
 
 class _ResolutionSheet extends StatefulWidget {
@@ -546,6 +576,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
   }
 
   void _showSourceSheet() {
+    final t = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -568,7 +599,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Take Photo'),
+              title: Text(t.takePhoto),
               onTap: () {
                 Navigator.pop(context);
                 _pickEvidence();
@@ -576,7 +607,7 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from Gallery'),
+              title: Text(t.chooseFromGallery),
               onTap: () {
                 Navigator.pop(context);
                 _pickEvidenceFromGallery();
@@ -590,10 +621,12 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
   }
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context)!;
+
     if (_rootCause == null || _solution == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill root cause and solution'),
+        SnackBar(
+          content: Text(t.completionPleaseFill),
           backgroundColor: AppColors.error,
         ),
       );
@@ -601,10 +634,10 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
     }
 
     if (_evidenceImage == null) {
-      setState(() => _evidenceError = 'Completion photo is required');
+      setState(() => _evidenceError = t.completionPhotoError);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please attach a completion photo'),
+        SnackBar(
+          content: Text(t.completionPleaseAttach),
           backgroundColor: AppColors.error,
         ),
       );
@@ -629,8 +662,8 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
     if (imageUrl == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to upload evidence. Try again.'),
+        SnackBar(
+          content: Text(t.completionUploadFailed),
           backgroundColor: AppColors.error,
         ),
       );
@@ -648,312 +681,332 @@ class _ResolutionSheetState extends State<_ResolutionSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final t = AppLocalizations.of(context)!;
+
+    return Padding(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Job Completion',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Root cause
-            const Text(
-              'Root Cause',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _rootCause,
-              decoration: const InputDecoration(
-                hintText: 'Select root cause',
-              ),
-              items: widget.rootCauses
-                  .map((r) =>
-                  DropdownMenuItem(value: r, child: Text(r)))
-                  .toList(),
-              onChanged: (v) => setState(() => _rootCause = v),
-            ),
-            if (_rootCause == 'Others') ...[
-              const SizedBox(height: 8),
-              TextField(
-                controller: _customRootCause,
-                decoration: const InputDecoration(
-                  hintText: 'Describe root cause',
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-
-            // Solution
-            const Text(
-              'Solution Applied',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _solution,
-              decoration: const InputDecoration(
-                hintText: 'Select solution',
-              ),
-              items: widget.solutions
-                  .map((s) =>
-                  DropdownMenuItem(value: s, child: Text(s)))
-                  .toList(),
-              onChanged: (v) => setState(() => _solution = v),
-            ),
-            if (_solution == 'Others') ...[
-              const SizedBox(height: 8),
-              TextField(
-                controller: _customSolution,
-                decoration: const InputDecoration(
-                  hintText: 'Describe solution',
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-
-            // Notes
-            const Text(
-              'Additional Notes (Optional)',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _notesController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Any other notes',
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Evidence (required)
-            Row(
-              children: [
-                const Text(
-                  'Completion Photo',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.errorLight,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'REQUIRED',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.error,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Take a photo showing the resolved work.',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            if (_evidenceImage == null)
-              InkWell(
-                onTap: _showSourceSheet,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  decoration: BoxDecoration(
-                    color: _evidenceError != null
-                        ? AppColors.error.withOpacity(0.06)
-                        : AppColors.background,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: _evidenceError != null
-                          ? AppColors.error
-                          : AppColors.divider,
-                      width: _evidenceError != null ? 2 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.add_a_photo_outlined,
-                        size: 28,
-                        color: _evidenceError != null
-                            ? AppColors.error
-                            : AppColors.primary,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      const SizedBox(height: 6),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    t.completionFormTitle,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ─── Root cause ───
+                  Text(
+                    t.completionRootCause,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: _rootCause,
+                    decoration: InputDecoration(
+                      hintText: t.completionSelectRootCause,
+                    ),
+                    items: widget.rootCauses
+                        .map((r) => DropdownMenuItem(
+                        value: r, child: Text(r)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _rootCause = v),
+                  ),
+                  if (_rootCause == 'Others') ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _customRootCause,
+                      decoration: InputDecoration(
+                        hintText: t.describeRootCauseHint,
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  // ─── Solution ───
+                  Text(
+                    t.completionSolution,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: _solution,
+                    decoration: InputDecoration(
+                      hintText: t.completionSelectSolution,
+                    ),
+                    items: widget.solutions
+                        .map((s) => DropdownMenuItem(
+                        value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _solution = v),
+                  ),
+                  if (_solution == 'Others') ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _customSolution,
+                      decoration: InputDecoration(
+                        hintText: t.describeSolutionHint,
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  // ─── Notes ───
+                  Text(
+                    t.completionNotes,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: t.completionNotesHint,
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ─── Evidence (required) ───
+                  Row(
+                    children: [
                       Text(
-                        'Add completion photo',
-                        style: TextStyle(
-                          fontSize: 13,
+                        t.completionPhotoLabel,
+                        style: const TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: _evidenceError != null
-                              ? AppColors.error
-                              : AppColors.primary,
+                          fontSize: 13,
                         ),
                       ),
-                      if (_evidenceError != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _evidenceError!,
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.errorLight,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          t.required.toUpperCase(),
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.error,
-                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t.completionPhotoRequired,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_evidenceImage == null)
+                    InkWell(
+                      onTap: _showSourceSheet,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(
+                          color: _evidenceError != null
+                              ? AppColors.error.withOpacity(0.06)
+                              : AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _evidenceError != null
+                                ? AppColors.error
+                                : AppColors.divider,
+                            width: _evidenceError != null ? 2 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.add_a_photo_outlined,
+                              size: 28,
+                              color: _evidenceError != null
+                                  ? AppColors.error
+                                  : AppColors.primary,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              t.completionAddPhoto,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _evidenceError != null
+                                    ? AppColors.error
+                                    : AppColors.primary,
+                              ),
+                            ),
+                            if (_evidenceError != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                _evidenceError!,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(
+                            _evidenceImage!,
+                            width: double.infinity,
+                            height: 180,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: InkWell(
+                            onTap: () => setState(
+                                    () => _evidenceImage = null),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.check_circle,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  t.completionPhotoAttached,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              )
-            else
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(
-                      _evidenceImage!,
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
                     ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: InkWell(
-                      onTap: () =>
-                          setState(() => _evidenceImage = null),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
+
+                  const SizedBox(height: 24),
+
+                  SizedBox(
+                    height: 52,
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _uploading ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
-                          Icons.close,
-                          size: 16,
+                      ),
+                      child: _uploading
+                          ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
                           color: Colors.white,
+                          strokeWidth: 2,
                         ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.success,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle,
-                              size: 12, color: Colors.white),
-                          SizedBox(width: 4),
-                          Text(
-                            'Photo attached',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
+                      )
+                          : Text(
+                        t.completionSubmit,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-
-            const SizedBox(height: 24),
-
-            SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _uploading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _uploading
-                    ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
-                )
-                    : const Text(
-                  'Submit Completion',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
             ),
-          ],
+          ),
         ),
       ),
     );

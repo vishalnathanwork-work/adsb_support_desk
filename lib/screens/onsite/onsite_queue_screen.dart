@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -24,8 +25,10 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;   // ← moved UP
+
     return Scaffold(
-      appBar: AppBar(title: const Text('On-Site Jobs')),
+      appBar: AppBar(title: Text(t.onsiteQueue)),   // ← removed const
       body: StreamBuilder<List<Ticket>>(
         stream: _service.streamOnsiteQueue(),
         builder: (context, snapshot) {
@@ -37,9 +40,12 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
           }
 
           final all = snapshot.data ?? [];
-          final unclaimed = all.where((t) => t.status == 'pending_onsite').toList();
+          final unclaimed =
+          all.where((ticket) => ticket.status == 'pending_onsite').toList();
           final mine = all
-              .where((t) => t.status == 'in_progress' && t.assignedTo == widget.user.email)
+              .where((ticket) =>
+          ticket.status == 'in_progress' &&
+              ticket.assignedTo == widget.user.email)
               .toList();
 
           final filtered = switch (_filter) {
@@ -50,23 +56,29 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
 
           return Column(
             children: [
-              // Filter chips
               FilterChipRow(
                 selectedValue: _filter,
                 onSelected: (v) => setState(() => _filter = v),
                 options: [
-                  FilterOption(label: 'Unclaimed', value: 'unclaimed', count: unclaimed.length),
-                  FilterOption(label: 'My Jobs', value: 'mine', count: mine.length),
-                  const FilterOption(label: 'All', value: 'all'),
+                  FilterOption(
+                    label: t.onsiteUnclaimed,
+                    value: 'unclaimed',
+                    count: unclaimed.length,
+                  ),
+                  FilterOption(
+                    label: t.onsiteMyJobs,
+                    value: 'mine',
+                    count: mine.length,
+                  ),
+                  FilterOption(label: t.onsiteAll, value: 'all'),   // ← removed const
                 ],
               ),
-
               Expanded(
                 child: filtered.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
                   icon: Icons.check_circle_outline,
-                  title: 'No jobs here',
-                  subtitle: 'Jobs will appear here in real time',
+                  title: t.onsiteNoJobs,                        // ← removed const
+                  subtitle: t.onsiteNoJobsHint,                 // ← removed const
                 )
                     : ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -81,8 +93,8 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
     );
   }
 
-  Widget _ticketTile(Ticket t) {
-    final isUnclaimed = t.status == 'pending_onsite';
+  Widget _ticketTile(Ticket ticket) {
+    final isUnclaimed = ticket.status == 'pending_onsite';
 
     return InkWell(
       onTap: () async {
@@ -90,7 +102,7 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => OnsiteJobScreen(
-              ticketId: t.id,
+              ticketId: ticket.id,
               user: widget.user,
             ),
           ),
@@ -117,7 +129,7 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    t.id,
+                    ticket.id,
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -125,12 +137,12 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
                     ),
                   ),
                 ),
-                StatusBadge(status: t.status),
+                StatusBadge(status: ticket.status),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              t.productType,
+              ticket.productType,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -138,7 +150,7 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
             ),
             const SizedBox(height: 3),
             Text(
-              t.productIssue,
+              ticket.productIssue,
               style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
@@ -152,7 +164,7 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    '${t.siteName} — ${t.laneName}',
+                    '${ticket.siteName} — ${ticket.laneName}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -160,7 +172,7 @@ class _OnsiteQueueScreenState extends State<OnsiteQueueScreen> {
                   ),
                 ),
                 Text(
-                  DateFormatter.relative(t.updatedAt),
+                  DateFormatter.relative(ticket.updatedAt),
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,

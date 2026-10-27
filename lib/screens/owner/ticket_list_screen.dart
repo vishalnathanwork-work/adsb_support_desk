@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
@@ -25,7 +26,6 @@ class TicketListScreen extends StatefulWidget {
 
 class _TicketListScreenState extends State<TicketListScreen> {
   final _service = TicketService();
-
   String _filter = 'active';
 
   Future<void> _openCreate() async {
@@ -35,28 +35,27 @@ class _TicketListScreenState extends State<TicketListScreen> {
         builder: (_) => CreateTicketScreen(user: widget.user),
       ),
     );
-    // No reload — the stream handles new tickets.
   }
 
   @override
   Widget build(BuildContext context) {
-    // ─── No sites case ───
+    final t = AppLocalizations.of(context)!;
+
     if (widget.user.siteIds.isEmpty) {
-      final empty = const EmptyState(
+      final empty = EmptyState(
         icon: Icons.location_off_outlined,
-        title: 'No sites assigned',
-        subtitle: 'Contact admin',
+        title: t.noSitesAssigned,
+        subtitle: t.contactAdmin,
       );
 
       if (!widget.showAppBar) return empty;
 
       return Scaffold(
-        appBar: AppBar(title: const Text('Tickets')),
+        appBar: AppBar(title: Text(t.ticketsTitle)),
         body: empty,
       );
     }
 
-    // ─── Live list ───
     final body = StreamBuilder<List<Ticket>>(
       stream: _service.streamActiveTicketsForSites(widget.user.siteIds),
       builder: (context, snapshot) {
@@ -73,9 +72,9 @@ class _TicketListScreenState extends State<TicketListScreen> {
                   const Icon(Icons.error_outline,
                       size: 48, color: AppColors.error),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Could not load tickets',
-                    style: TextStyle(
+                  Text(
+                    t.couldNotLoadTickets,
+                    style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 6),
@@ -99,10 +98,10 @@ class _TicketListScreenState extends State<TicketListScreen> {
         final filtered = _filter == 'active' ? activeTickets : tickets;
 
         if (tickets.isEmpty) {
-          return const EmptyState(
+          return EmptyState(
             icon: Icons.inbox_outlined,
-            title: 'No tickets yet',
-            subtitle: 'Tap + to create a new ticket',
+            title: t.noTicketsYet,
+            subtitle: t.noTicketsYetHint,
           );
         }
 
@@ -113,12 +112,12 @@ class _TicketListScreenState extends State<TicketListScreen> {
               onSelected: (v) => setState(() => _filter = v),
               options: [
                 FilterOption(
-                  label: 'Active',
+                  label: t.activeFilter,
                   value: 'active',
                   count: activeTickets.length,
                 ),
                 FilterOption(
-                  label: 'All',
+                  label: t.allFilter,
                   value: 'all',
                   count: tickets.length,
                 ),
@@ -126,29 +125,29 @@ class _TicketListScreenState extends State<TicketListScreen> {
             ),
             Expanded(
               child: filtered.isEmpty
-                  ? const EmptyState(
-                      icon: Icons.inbox_outlined,
-                      title: 'No active tickets',
-                      subtitle: 'Switch to "All" to see closed tickets',
-                    )
+                  ? EmptyState(
+                icon: Icons.inbox_outlined,
+                title: t.noActiveTickets,
+                subtitle: t.noActiveTicketsHint,
+              )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, i) => TicketCard(
-                        ticket: filtered[i],
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => TicketDetailScreen(
-                                ticketId: filtered[i].id,
-                                user: widget.user,
-                              ),
-                            ),
-                          );
-                        },
+                padding: const EdgeInsets.all(16),
+                itemCount: filtered.length,
+                itemBuilder: (context, i) => TicketCard(
+                  ticket: filtered[i],
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TicketDetailScreen(
+                          ticketId: filtered[i].id,
+                          user: widget.user,
+                        ),
                       ),
-                    ),
+                    );
+                  },
+                ),
+              ),
             ),
           ],
         );
@@ -158,12 +157,12 @@ class _TicketListScreenState extends State<TicketListScreen> {
     if (!widget.showAppBar) return body;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Tickets')),
+      appBar: AppBar(title: Text(t.ticketsTitle)),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreate,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add),
-        label: const Text('New Ticket'),
+        label: Text(t.newTicket),
       ),
       body: body,
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../config/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/client_model.dart';
 import '../../../models/site_model.dart';
 import '../../../services/site_service.dart';
@@ -21,7 +22,6 @@ class SiteFormSheet extends StatefulWidget {
   State<SiteFormSheet> createState() => _SiteFormSheetState();
 }
 
-/// Internal editable representation of a zone during form editing.
 class _ZoneDraft {
   String id;
   String name;
@@ -37,7 +37,6 @@ class _ZoneDraft {
     this.existingLanes = const [],
   });
 
-  /// Build final Lane list. Reuses existing lane IDs where possible.
   List<Lane> buildLanes() {
     final existingEntries = existingLanes
         .where((l) => l.isEntry)
@@ -112,7 +111,6 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
       _selectedClientId = widget.clients.first.id;
     }
 
-    // Convert existing zones to drafts
     if (s != null && s.zones.isNotEmpty) {
       _zones = s.zones.map((z) {
         return _ZoneDraft(
@@ -124,7 +122,6 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
         );
       }).toList();
     } else {
-      // Fresh site → start with one blank zone
       _zones = [_newZoneDraft()];
     }
   }
@@ -146,10 +143,6 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // ZONE ACTIONS
-  // ─────────────────────────────────────────────
-
   void _addZone() {
     setState(() {
       _zones.add(_newZoneDraft());
@@ -157,8 +150,9 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
   }
 
   void _removeZone(int index) {
+    final t = AppLocalizations.of(context)!;
     if (_zones.length <= 1) {
-      _snack('Site must have at least one zone', AppColors.error);
+      _snack(t.siteMustHaveZone, AppColors.error);
       return;
     }
     setState(() {
@@ -166,7 +160,6 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
     });
   }
 
-  /// Check if a name is already used by another zone (excluding given index).
   bool _isZoneNameDuplicate(String name, {int? excludeIndex}) {
     if (name.trim().isEmpty) return false;
     for (int i = 0; i < _zones.length; i++) {
@@ -179,53 +172,39 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
     return false;
   }
 
-  // ─────────────────────────────────────────────
-  // SAVE
-  // ─────────────────────────────────────────────
-
   Future<void> _save() async {
+    final t = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedClientId == null) {
-      _snack('Please select a client', AppColors.error);
+      _snack(t.siteSelectClientRequired, AppColors.error);
       return;
     }
 
-    // Validate zones
     final seenNames = <String>{};
     for (int i = 0; i < _zones.length; i++) {
       final z = _zones[i];
 
-      // Zone name required
       if (z.name.trim().isEmpty) {
-        _snack('Zone ${i + 1}: name is required', AppColors.error);
+        _snack(t.siteZoneNameRequired('${i + 1}'), AppColors.error);
         return;
       }
 
-      // Duplicate check
       final lower = z.name.trim().toLowerCase();
       if (seenNames.contains(lower)) {
-        _snack(
-          'Zone "${z.name}" is duplicated. Zone names must be unique.',
-          AppColors.error,
-        );
+        _snack(t.zoneDuplicated(z.name), AppColors.error);
         return;
       }
       seenNames.add(lower);
 
-      // At least 1 lane
       if (z.entryCount == 0 && z.exitCount == 0) {
-        _snack(
-          'Zone "${z.name}": add at least one entry or exit',
-          AppColors.error,
-        );
+        _snack(t.zoneNeedsLane(z.name), AppColors.error);
         return;
       }
     }
 
     setState(() => _isSaving = true);
 
-    // Build final zones
     final zones = _zones.map((draft) {
       return Zone(
         id: draft.id,
@@ -273,7 +252,7 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
     if (ok) {
       Navigator.pop(context, true);
     } else {
-      _snack('Failed to save site', AppColors.error);
+      _snack(t.siteSaveFailed, AppColors.error);
     }
   }
 
@@ -287,12 +266,10 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Container(
       padding: EdgeInsets.only(
         left: 20,
@@ -314,7 +291,7 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
               _handle(),
               const SizedBox(height: 20),
               Text(
-                isEditMode ? 'Edit Site' : 'Add Site',
+                isEditMode ? t.siteEditTitle : t.siteAddTitle,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -322,14 +299,13 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
               ),
               const SizedBox(height: 20),
 
-              // Client
-              _label('Client (Company)'),
+              _label(t.clientLabel),
               DropdownButtonFormField<String>(
                 initialValue: _selectedClientId,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  hintText: 'Select which client owns this site',
-                  prefixIcon: Icon(Icons.business_outlined),
+                decoration: InputDecoration(
+                  hintText: t.siteClientOwnerHint,
+                  prefixIcon: const Icon(Icons.business_outlined),
                 ),
                 items: widget.clients.map((c) {
                   return DropdownMenuItem(
@@ -341,102 +317,89 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
                   );
                 }).toList(),
                 onChanged: (v) => setState(() => _selectedClientId = v),
-                validator: (v) => v == null ? 'Required' : null,
+                validator: (v) => v == null ? t.required : null,
               ),
               const SizedBox(height: 14),
 
-              // Name
-              _label('Site Name'),
+              _label(t.siteNameLabel),
               TextFormField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Hospital Melaka',
-                  prefixIcon: Icon(Icons.location_city_outlined),
+                decoration: InputDecoration(
+                  hintText: t.siteNameHint,
+                  prefixIcon: const Icon(Icons.location_city_outlined),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Required'
+                    ? t.required
                     : null,
               ),
               const SizedBox(height: 14),
 
-              // Address
-              _label('Address'),
+              _label(t.siteAddressLabel),
               TextFormField(
                 controller: _addressController,
                 maxLines: 2,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Jalan Melaka, 75000 Melaka',
-                  prefixIcon: Icon(Icons.map_outlined),
+                decoration: InputDecoration(
+                  hintText: t.siteAddressHint,
+                  prefixIcon: const Icon(Icons.map_outlined),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Required'
+                    ? t.required
                     : null,
               ),
               const SizedBox(height: 14),
 
-              // Notes
-              _label('Notes (Optional)'),
+              _label(t.siteNotesOptional),
               TextFormField(
                 controller: _notesController,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: 'Any internal notes about this site',
-                  prefixIcon: Icon(Icons.notes_outlined),
+                decoration: InputDecoration(
+                  hintText: t.siteNotesHint,
+                  prefixIcon: const Icon(Icons.notes_outlined),
                 ),
               ),
               const SizedBox(height: 24),
 
-              // ─── PARKING ZONES ───
               const Divider(),
               const SizedBox(height: 12),
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Parking Zones',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Name each zone (e.g. P1, P2) and specify '
-                              'how many entry/exit points it has.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    t.siteZonesTitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    t.siteZonesSubtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
 
-              // Zone list
               ...List.generate(_zones.length, (i) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildZoneCard(i),
+                  child: _buildZoneCard(i, t),
                 );
               }),
 
-              // Add zone button
               OutlinedButton.icon(
                 onPressed: _addZone,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text(
-                  'Add Another Zone',
-                  style: TextStyle(
+                label: Text(
+                  t.siteAddAnotherZone,
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -453,29 +416,27 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
               ),
               const SizedBox(height: 20),
 
-              // Active toggle
               SwitchListTile(
                 value: _isActive,
                 onChanged: (v) => setState(() => _isActive = v),
                 activeColor: AppColors.primary,
                 contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Active',
-                  style: TextStyle(
+                title: Text(
+                  t.siteActiveLabel,
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 subtitle: Text(
                   _isActive
-                      ? 'Site appears in registration + ticket creation'
-                      : 'Site hidden from users',
+                      ? t.siteActiveSubtitle
+                      : t.siteInactiveSubtitle,
                   style: const TextStyle(fontSize: 11),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Save
               SizedBox(
                 height: 52,
                 width: double.infinity,
@@ -498,7 +459,9 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
                     ),
                   )
                       : Text(
-                    isEditMode ? 'Save Changes' : 'Create Site',
+                    isEditMode
+                        ? t.siteSaveChanges
+                        : t.siteCreateAction,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -513,11 +476,7 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
     );
   }
 
-  // ═══════════════════════════════════════════
-  // ZONE CARD
-  // ═══════════════════════════════════════════
-
-  Widget _buildZoneCard(int index) {
+  Widget _buildZoneCard(int index, AppLocalizations t) {
     final zone = _zones[index];
 
     return Container(
@@ -530,7 +489,6 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: "Zone 1" + remove button
           Row(
             children: [
               Container(
@@ -543,7 +501,7 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'ZONE ${index + 1}',
+                  t.zoneLabel('${index + 1}'),
                   style: const TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
@@ -570,14 +528,13 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
           ),
           const SizedBox(height: 12),
 
-          // Zone name
           TextFormField(
             initialValue: zone.name,
             textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              hintText: 'e.g. P1, Basement, North Gate',
-              prefixIcon: Icon(Icons.local_parking, size: 20),
-              labelText: 'Zone name',
+            decoration: InputDecoration(
+              hintText: t.zoneNameHint,
+              prefixIcon: const Icon(Icons.local_parking, size: 20),
+              labelText: t.zoneNameField,
               fillColor: Colors.white,
             ),
             onChanged: (v) {
@@ -585,21 +542,20 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
               setState(() {});
             },
             validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Required';
+              if (v == null || v.trim().isEmpty) return t.required;
               if (_isZoneNameDuplicate(v, excludeIndex: index)) {
-                return 'Zone name already used';
+                return t.zoneNameDuplicate;
               }
               return null;
             },
           ),
           const SizedBox(height: 12),
 
-          // Entry / Exit counts
           Row(
             children: [
               Expanded(
                 child: _countField(
-                  label: 'Entry points',
+                  label: t.zoneEntryPoints,
                   icon: Icons.login,
                   color: AppColors.success,
                   value: zone.entryCount,
@@ -611,7 +567,7 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: _countField(
-                  label: 'Exit points',
+                  label: t.zoneExitPoints,
                   icon: Icons.logout,
                   color: AppColors.warning,
                   value: zone.exitCount,
@@ -623,7 +579,6 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
             ],
           ),
 
-          // Preview chips
           if (zone.entryCount > 0 || zone.exitCount > 0) ...[
             const SizedBox(height: 12),
             Container(
@@ -638,17 +593,17 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.visibility_outlined,
                         size: 12,
                         color: AppColors.primary,
                       ),
-                      SizedBox(width: 5),
+                      const SizedBox(width: 5),
                       Text(
-                        'PREVIEW',
-                        style: TextStyle(
+                        t.zonePreview,
+                        style: const TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4,
@@ -664,14 +619,14 @@ class _SiteFormSheetState extends State<SiteFormSheet> {
                     children: [
                       ...List.generate(zone.entryCount, (i) {
                         return _previewChip(
-                          'Entry ${i + 1}',
+                          t.entryN('${i + 1}'),
                           AppColors.success,
                           Icons.login,
                         );
                       }),
                       ...List.generate(zone.exitCount, (i) {
                         return _previewChip(
-                          'Exit ${i + 1}',
+                          t.exitN('${i + 1}'),
                           AppColors.warning,
                           Icons.logout,
                         );

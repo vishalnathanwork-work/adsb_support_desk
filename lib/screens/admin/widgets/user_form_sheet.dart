@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/client_model.dart';
 import '../../../models/site_model.dart';
 import '../../../services/owner_service.dart';
@@ -132,14 +133,11 @@ class _UserFormSheetState extends State<UserFormSheet> {
     super.dispose();
   }
 
-  // ═══════════════════════════════════════════════
-  // SAVE — Edit mode
-  // ═══════════════════════════════════════════════
-
   Future<void> _saveEdit() async {
+    final t = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
     if (requiresClient && _selectedClient == null) {
-      _snack('Please select a client', AppColors.error);
+      _snack(t.approvalPleaseSelectClient, AppColors.error);
       return;
     }
 
@@ -166,18 +164,15 @@ class _UserFormSheetState extends State<UserFormSheet> {
     if (ok) {
       Navigator.pop(context, true);
     } else {
-      _snack('Failed to save changes', AppColors.error);
+      _snack(t.adminFailedSaveChanges, AppColors.error);
     }
   }
 
-  // ═══════════════════════════════════════════════
-  // SAVE — Create mode (Cloud Function)
-  // ═══════════════════════════════════════════════
-
   Future<void> _saveCreate() async {
+    final t = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
     if (requiresClient && _selectedClient == null) {
-      _snack('Please select a client', AppColors.error);
+      _snack(t.approvalPleaseSelectClient, AppColors.error);
       return;
     }
 
@@ -200,10 +195,10 @@ class _UserFormSheetState extends State<UserFormSheet> {
     setState(() => _isSaving = false);
 
     if (result.uid != null) {
-      _snack('User created successfully', AppColors.success);
+      _snack(t.adminUserCreated, AppColors.success);
       Navigator.pop(context, true);
     } else {
-      _snack(result.error ?? 'Failed to create user', AppColors.error);
+      _snack(result.error ?? t.adminFailedCreateUser, AppColors.error);
     }
   }
 
@@ -213,12 +208,29 @@ class _UserFormSheetState extends State<UserFormSheet> {
     );
   }
 
-  // ═══════════════════════════════════════════════
-  // BUILD
-  // ═══════════════════════════════════════════════
+  String _roleLabel(AppLocalizations t, String role) {
+    switch (role) {
+      case 'owner':
+        return t.siteOwner;
+      case 'operator':
+        return t.siteOperator;
+      case 'adsb':
+        return t.supportTeam;
+      case 'technician':
+        return t.technicalAdvisor;
+      case 'onsite':
+        return t.onSiteTechnician;
+      case 'admin':
+        return t.administrator;
+      default:
+        return role;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Container(
       padding: EdgeInsets.only(
         left: 20,
@@ -245,7 +257,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
               _handle(),
               const SizedBox(height: 20),
               Text(
-                isEditMode ? 'Edit User' : 'Add New User',
+                isEditMode ? t.adminEditUser : t.adminAddNewUser,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -253,53 +265,53 @@ class _UserFormSheetState extends State<UserFormSheet> {
               ),
               const SizedBox(height: 20),
 
-              // Name
-              _label('Full Name'),
+              _label(t.fullName),
               TextFormField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Ahmad bin Abdullah',
-                  prefixIcon: Icon(Icons.person_outline),
+                decoration: InputDecoration(
+                  hintText: t.fullNameHint,
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
-                validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Required' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? t.required
+                    : null,
               ),
               const SizedBox(height: 16),
 
-              // Email
-              _label('Login Email'),
+              _label(t.adminLoginEmail),
               TextFormField(
                 controller: _emailController,
                 enabled: !isEditMode,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  hintText: 'user@example.com',
+                  hintText: t.emailHintRegister,
                   prefixIcon: const Icon(Icons.email_outlined),
                   fillColor: isEditMode
                       ? Colors.grey.shade100
                       : Colors.white,
                   helperText: isEditMode
-                      ? 'Email cannot be changed'
-                      : 'User will use this to log in',
+                      ? t.adminEmailImmutable
+                      : t.adminEmailLoginHint,
                   helperStyle: const TextStyle(fontSize: 11),
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Required';
-                  if (!v.contains('@')) return 'Invalid email';
+                  if (v == null || v.trim().isEmpty) {
+                    return t.required;
+                  }
+                  if (!v.contains('@')) return t.invalidEmail;
                   return null;
                 },
               ),
               const SizedBox(height: 16),
 
-              // Password (create mode only)
               if (!isEditMode) ...[
-                _label('Temporary Password'),
+                _label(t.adminTempPassword),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    hintText: 'Minimum 6 characters',
+                    hintText: t.passwordMin6,
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -314,16 +326,15 @@ class _UserFormSheetState extends State<UserFormSheet> {
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    if (v.length < 6) return 'Minimum 6 characters';
+                    if (v == null || v.isEmpty) return t.required;
+                    if (v.length < 6) return t.passwordMin6;
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
               ],
 
-              // Role
-              _label('Role'),
+              _label(t.adminRoleLabel),
               DropdownButtonFormField<String>(
                 initialValue: _selectedRole,
                 decoration: const InputDecoration(
@@ -332,7 +343,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
                 items: widget.allowedRoles
                     .map((r) => DropdownMenuItem(
                   value: r,
-                  child: Text(_roleLabel(r)),
+                  child: Text(_roleLabel(t, r)),
                 ))
                     .toList(),
                 onChanged: (v) {
@@ -344,19 +355,19 @@ class _UserFormSheetState extends State<UserFormSheet> {
                     }
                   });
                 },
-                validator: (v) => v == null ? 'Required' : null,
+                validator: (v) => v == null ? t.required : null,
               ),
               const SizedBox(height: 16),
 
-              // Client selection (external only)
               if (requiresClient) ...[
-                _label('Client (Company)'),
+                _label(t.clientLabel),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedClient?.id,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Select which client this user belongs to',
-                    prefixIcon: Icon(Icons.business_outlined),
+                  decoration: InputDecoration(
+                    hintText: t.adminSelectClientHint,
+                    prefixIcon:
+                    const Icon(Icons.business_outlined),
                   ),
                   items: _allClients.map((c) {
                     return DropdownMenuItem(
@@ -377,37 +388,36 @@ class _UserFormSheetState extends State<UserFormSheet> {
                     });
                     await _loadSitesFor(id);
                   },
-                  validator: (v) => v == null ? 'Required' : null,
+                  validator: (v) => v == null ? t.required : null,
                 ),
                 const SizedBox(height: 16),
 
                 if (_selectedClient != null) ...[
-                  _label('Assign Sites'),
-                  _buildSiteSelector(),
+                  _label(t.adminAssignSites),
+                  _buildSiteSelector(t),
                   const SizedBox(height: 16),
                 ],
               ],
 
-              // Phone
-              _label('Phone (Optional)'),
+              _label(t.adminPhoneOptional),
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  hintText: '+60 12-345 6789',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                decoration: InputDecoration(
+                  hintText: t.phoneHint,
+                  prefixIcon: const Icon(Icons.phone_outlined),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Company (external only)
               if (hasExternalRole) ...[
-                _label('Company Name (Optional)'),
+                _label(t.adminCompanyOptional),
                 TextFormField(
                   controller: _companyController,
-                  decoration: const InputDecoration(
-                    hintText: 'Auto-filled from selected client',
-                    prefixIcon: Icon(Icons.apartment_outlined),
+                  decoration: InputDecoration(
+                    hintText: t.adminCompanyAutoFilled,
+                    prefixIcon:
+                    const Icon(Icons.apartment_outlined),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -415,7 +425,6 @@ class _UserFormSheetState extends State<UserFormSheet> {
 
               const SizedBox(height: 8),
 
-              // Save
               SizedBox(
                 height: 52,
                 width: double.infinity,
@@ -440,7 +449,9 @@ class _UserFormSheetState extends State<UserFormSheet> {
                     ),
                   )
                       : Text(
-                    isEditMode ? 'Save Changes' : 'Create User',
+                    isEditMode
+                        ? t.adminSaveChanges
+                        : t.adminCreateUserBtn,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -455,7 +466,7 @@ class _UserFormSheetState extends State<UserFormSheet> {
     );
   }
 
-  Widget _buildSiteSelector() {
+  Widget _buildSiteSelector(AppLocalizations t) {
     if (_loadingSites) {
       return const Padding(
         padding: EdgeInsets.all(20),
@@ -471,14 +482,15 @@ class _UserFormSheetState extends State<UserFormSheet> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.warning),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.warning_amber_outlined, color: AppColors.warning),
-            SizedBox(width: 10),
+            const Icon(Icons.warning_amber_outlined,
+                color: AppColors.warning),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'This client has no sites yet.',
-                style: TextStyle(fontSize: 13),
+                t.adminClientNoSites,
+                style: const TextStyle(fontSize: 13),
               ),
             ),
           ],
@@ -549,23 +561,4 @@ class _UserFormSheetState extends State<UserFormSheet> {
       ),
     ),
   );
-
-  String _roleLabel(String role) {
-    switch (role) {
-      case 'owner':
-        return 'Site Owner';
-      case 'operator':
-        return 'Site Operator';
-      case 'adsb':
-        return 'ADSB Support Team';
-      case 'technician':
-        return 'Technical Advisor';
-      case 'onsite':
-        return 'On-Site Technician';
-      case 'admin':
-        return 'Administrator';
-      default:
-        return role;
-    }
-  }
 }
