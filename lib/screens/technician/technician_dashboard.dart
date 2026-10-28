@@ -4,8 +4,10 @@ import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/session_service.dart';
-import 'package:adsb_support_desk/services/auth_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/ticket_service.dart';
+import '../../widgets/action_tile.dart';
+import '../../widgets/stat_card.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
 import 'technician_queue_screen.dart';
@@ -113,6 +115,7 @@ class _TTAdvisorHome extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(t.technicalAdvisor)),
       body: SafeArea(
         child: ListView(
@@ -170,20 +173,22 @@ class _TTAdvisorHome extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _statCard(
+                  child: StatCard(
                     label: t.pending,
                     value: isLoading ? '…' : '$queueCount',
                     icon: Icons.pending_outlined,
                     color: AppColors.warning,
+                    variant: StatCardVariant.warning,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _statCard(
+                  child: StatCard(
                     label: t.handled,
                     value: isLoading ? '…' : '$handledCount',
                     icon: Icons.check_circle_outline,
-                    color: AppColors.success,
+                    color: AppColors.accentDark,
+                    variant: StatCardVariant.green,
                   ),
                 ),
               ],
@@ -197,133 +202,31 @@ class _TTAdvisorHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _actionTile(
-              context,
-              Icons.rate_review_outlined,
-              t.reviewQueue,
-              t.reviewHint,
-              AppColors.primary,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.rate_review_outlined,
+              title: t.reviewQueue,
+              subtitle: t.reviewHint,
+              accentColor: AppColors.primary,
+              variant: ActionTileVariant.blue,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => TechnicianQueueScreen(user: user),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.history,
-              t.myHistory,
-              t.historyHint,
-              AppColors.accent,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.history,
+              title: t.myHistory,
+              subtitle: t.historyHint,
+              accentColor: AppColors.accentDark,
+              variant: ActionTileVariant.green,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => TechnicianHistoryScreen(user: user),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionTile(
-      BuildContext context,
-      IconData icon,
-      String title,
-      String subtitle,
-      Color color,
-      VoidCallback onTap,
-      ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
             ),
           ],
         ),

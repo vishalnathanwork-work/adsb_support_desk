@@ -399,6 +399,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -425,8 +426,8 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
           // ─── Read-only banner (only when ticket loaded AND closed) ───
           if (_ticket != null && !_chatOpen) _readOnlyBanner(t),
 
-          // ─── Ticket summary card ───
-          if (_ticket != null) _summaryCard(_ticket!, t),
+          // ⭐ Hide summary card when keyboard is open to avoid overflow
+          if (_ticket != null && !keyboardOpen) _summaryCard(_ticket!, t),
 
           // ─── Messages list / Loading / Error state ───
           Expanded(
@@ -514,8 +515,7 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
                 if (messages.length != _lastMessageCount) {
                   _lastMessageCount = messages.length;
-                  WidgetsBinding.instance
-                      .addPostFrameCallback(
+                  WidgetsBinding.instance.addPostFrameCallback(
                         (_) => _scrollToBottom(),
                   );
                 }
@@ -584,14 +584,11 @@ class _AdsbChatScreenState extends State<AdsbChatScreen> {
 
   /// Shown when chat is open.
   /// Keyboard-aware: uses viewInsets.bottom instead of SafeArea.
+  /// Shown when chat is open.
+  /// Scaffold handles the keyboard resize — no manual viewInsets needed.
   Widget _chatInputBar(AppLocalizations t) {
     return Container(
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: 8 + MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(

@@ -6,6 +6,8 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
+import '../../widgets/action_tile.dart';
+import '../../widgets/stat_card.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
 import '../owner/notifications_screen.dart';
@@ -119,6 +121,7 @@ class _AdminHome extends StatelessWidget {
         .length;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(t.administrator)),
       body: SafeArea(
         child: ListView(
@@ -166,20 +169,26 @@ class _AdminHome extends StatelessWidget {
             if (isLoading)
               const Center(child: CircularProgressIndicator())
             else
-              Column(
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _kpiCard(t.total, '$total',
-                            Icons.list_alt_outlined, AppColors.primary),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _kpiCard(t.open, '$open',
-                            Icons.pending_outlined, AppColors.warning),
-                      ),
-                    ],
+                  Expanded(
+                    child: StatCard(
+                      label: t.total,
+                      value: '$total',
+                      icon: Icons.list_alt_outlined,
+                      color: AppColors.primary,
+                      variant: StatCardVariant.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: StatCard(
+                      label: t.open,
+                      value: '$open',
+                      icon: Icons.pending_outlined,
+                      color: AppColors.warning,
+                      variant: StatCardVariant.warning,
+                    ),
                   ),
                 ],
               ),
@@ -192,193 +201,96 @@ class _AdminHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _actionTile(
-              context,
-              Icons.confirmation_number_outlined,
-              t.allTicketsTitle,
-              t.allTicketsHint,
-              AppColors.primary,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.confirmation_number_outlined,
+              title: t.allTicketsTitle,
+              subtitle: t.allTicketsHint,
+              accentColor: AppColors.primary,
+              variant: ActionTileVariant.blue,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AdminAllTicketsScreen(user: user),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.groups_outlined,
-              t.teamManagement,
-              t.teamManagementHint,
-              AppColors.accent,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.groups_outlined,
+              title: t.teamManagement,
+              subtitle: t.teamManagementHint,
+              accentColor: AppColors.accent,
+              variant: ActionTileVariant.green,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AdminTeamManagementScreen(user: user),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.people_outline,
-              t.userManagement,
-              t.userManagementHint,
-              AppColors.warning,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.people_outline,
+              title: t.userManagement,
+              subtitle: t.userManagementHint,
+              accentColor: AppColors.warning,
+              variant: ActionTileVariant.warning,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AdminUsersScreen(user: user),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.business_outlined,
-              t.clientsTitle,
-              t.clientsHint,
-              const Color(0xFF00838F),
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.business_outlined,
+              title: t.clientsTitle,
+              subtitle: t.clientsHint,
+              accentColor: AppColors.primary,
+              variant: ActionTileVariant.blue,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const AdminClientsScreen(),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.location_city_outlined,
-              t.sitesTitle,
-              t.sitesHint,
-              const Color(0xFF6A1B9A),
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.location_city_outlined,
+              title: t.sitesTitle,
+              subtitle: t.sitesHint,
+              accentColor: AppColors.accentDark,
+              variant: ActionTileVariant.green,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const AdminSitesScreen(),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.tune,
-              t.systemPresets,
-              t.systemPresetsHint,
-              AppColors.textSecondary,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.tune,
+              title: t.systemPresets,
+              subtitle: t.systemPresetsHint,
+              accentColor: AppColors.textSecondary,
+              variant: ActionTileVariant.gray,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const AdminPresetManagementScreen(),
                 ),
               ),
             ),
-            _actionTile(
-              context,
-              Icons.analytics_outlined,
-              t.analytics,
-              t.analyticsHint,
-              AppColors.success,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.analytics_outlined,
+              title: t.analytics,
+              subtitle: t.analyticsHint,
+              accentColor: AppColors.success,
+              variant: ActionTileVariant.green,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const AnalyticsScreen(),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _kpiCard(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 26),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionTile(
-      BuildContext context,
-      IconData icon,
-      String title,
-      String subtitle,
-      Color color,
-      VoidCallback onTap,
-      ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
             ),
           ],
         ),

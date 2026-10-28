@@ -132,280 +132,316 @@ class _LoginScreenState extends State<LoginScreen> {
     final busy = _isLoading;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,   // ⭐ see global image
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight:
-                  constraints.maxHeight - (AppSpacing.xl * 2),
+
+      // ⭐ LOGIN-SPECIFIC BACKGROUND
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Layer 1 — login background image
+          Image.asset(
+            'assets/images/login_register_background.jpg',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF4A5568), Color(0xFF2F3643)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                child: Align(
-                  alignment: Alignment.center,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius:
-                      BorderRadius.circular(AppRadii.xl),
-                      boxShadow: AppShadows.large,
+              ),
+            ),
+          ),
+
+          // Layer 2 — dark overlay for readability
+          Container(
+            color: Colors.black.withOpacity(0.45),
+          ),
+
+          // Layer 3 — form content
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight:
+                      constraints.maxHeight - (AppSpacing.xl * 2),
                     ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // ─── Language chip ───
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: GestureDetector(
-                              onTap: _showLanguagePicker,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.background,
-                                  borderRadius:
-                                  BorderRadius.circular(
-                                    AppRadii.pill,
-                                  ),
-                                  border: Border.all(
-                                    color: AppColors.divider,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.language,
-                                      size: 16,
-                                      color: AppColors.primary,
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Container(
+                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius:
+                          BorderRadius.circular(AppRadii.xl),
+                          boxShadow: AppShadows.large,
+                        ),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment:
+                            CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ─── Language chip ───
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: GestureDetector(
+                                  onTap: _showLanguagePicker,
+                                  child: Container(
+                                    padding:
+                                    const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      LocaleController.instance
-                                          .locale
-                                          .languageCode ==
-                                          'ms'
-                                          ? 'MS'
-                                          : 'EN',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primary,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.background,
+                                      borderRadius:
+                                      BorderRadius.circular(
+                                        AppRadii.pill,
+                                      ),
+                                      border: Border.all(
+                                        color: AppColors.divider,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Center(child: AppLogo(size: 72)),
-                          const SizedBox(height: 20),
-                          Text(
-                            t.appTitle,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            t.signInSubtitle,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-
-                          CustomTextField(
-                            label: 'Username',
-                            hint: 'e.g. ahmad123',
-                            icon: Icons.person_outline,
-                            controller: _usernameController,
-                            keyboardType: TextInputType.text,
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Username is required';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
-                          CustomTextField(
-                            label: t.password,
-                            hint: t.passwordHint,
-                            icon: Icons.lock_outline,
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: AppColors.textSecondary,
-                                size: 20,
-                              ),
-                              onPressed: () => setState(() =>
-                              _obscurePassword = !_obscurePassword),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return t.passwordRequired;
-                              }
-                              if (v.length < 5) {
-                                return t.passwordMinLength;
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          Row(
-                            children: [
-                              SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: Checkbox(
-                                  value: _rememberMe,
-                                  activeColor: AppColors.primary,
-                                  materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                    BorderRadius.circular(4),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.language,
+                                          size: 16,
+                                          color: AppColors.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          LocaleController.instance
+                                              .locale
+                                              .languageCode ==
+                                              'ms'
+                                              ? 'MS'
+                                              : 'EN',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  onChanged: (v) => setState(
-                                          () => _rememberMe = v ?? false),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(height: 8),
+                              const Center(child: AppLogo(size: 72)),
+                              const SizedBox(height: 20),
                               Text(
-                                t.rememberMe,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-
-                          SizedBox(
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: busy ? null : _handleLogin,
-                              child: _isLoading
-                                  ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2.5,
+                                t.appTitle,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
                                 ),
-                              )
-                                  : Text(t.signIn),
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
+                              ),
+                              const SizedBox(height: 6),
                               Text(
-                                t.noAccount,
+                                t.signInSubtitle,
+                                textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                              TextButton(
-                                onPressed: busy
-                                    ? null
-                                    : () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                      const RegisterScreen(),
-                                    ),
-                                  );
+                              const SizedBox(height: 28),
+
+                              CustomTextField(
+                                label: 'Username',
+                                hint: 'e.g. ahmad123',
+                                icon: Icons.person_outline,
+                                controller: _usernameController,
+                                keyboardType: TextInputType.text,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) {
+                                    return 'Username is required';
+                                  }
+                                  return null;
                                 },
-                                child: Text(
-                                  t.createOne,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+                              ),
+                              const SizedBox(height: 16),
+
+                              CustomTextField(
+                                label: t.password,
+                                hint: t.passwordHint,
+                                icon: Icons.lock_outline,
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: AppColors.textSecondary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() =>
+                                  _obscurePassword =
+                                  !_obscurePassword),
+                                ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return t.passwordRequired;
+                                  }
+                                  if (v.length < 5) {
+                                    return t.passwordMinLength;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 12),
+
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Checkbox(
+                                      value: _rememberMe,
+                                      activeColor: AppColors.primary,
+                                      materialTapTargetSize:
+                                      MaterialTapTargetSize
+                                          .shrinkWrap,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                        BorderRadius.circular(4),
+                                      ),
+                                      onChanged: (v) => setState(
+                                              () => _rememberMe = v ?? false),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    t.rememberMe,
+                                    style:
+                                    const TextStyle(fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              SizedBox(
+                                height: 52,
+                                child: ElevatedButton(
+                                  onPressed: busy ? null : _handleLogin,
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child:
+                                    CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                      : Text(t.signIn),
+                                ),
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              Row(
+                                mainAxisAlignment:
+                                MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    t.noAccount,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                          const RegisterScreen(),
+                                        ),
+                                      );
+                                    },
+                                    child: Text(
+                                      t.createOne,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+
+                              Center(
+                                child: TextButton.icon(
+                                  onPressed: busy
+                                      ? null
+                                      : _openAdminWhatsApp,
+                                  icon: const Icon(
+                                    Icons.chat_bubble_outline,
+                                    size: 16,
                                     color: AppColors.primary,
+                                  ),
+                                  label: const Text(
+                                    'Forgot password? Chat with admin',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    padding:
+                                    const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    minimumSize: const Size(0, 0),
+                                    tapTargetSize:
+                                    MaterialTapTargetSize
+                                        .shrinkWrap,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+
+                              Center(
+                                child: Text(
+                                  'Version ${AppConstants.appVersion}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textTertiary,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-
-                          Center(
-                            child: TextButton.icon(
-                              onPressed:
-                              busy ? null : _openAdminWhatsApp,
-                              icon: const Icon(
-                                Icons.chat_bubble_outline,
-                                size: 16,
-                                color: AppColors.primary,
-                              ),
-                              label: const Text(
-                                'Forgot password? Chat with admin',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                minimumSize: const Size(0, 0),
-                                tapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          Center(
-                            child: Text(
-                              'Version ${AppConstants.appVersion}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textTertiary,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            );
-          },
-        ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

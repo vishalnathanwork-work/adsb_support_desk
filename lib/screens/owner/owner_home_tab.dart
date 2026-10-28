@@ -4,6 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
+import '../../widgets/stat_card.dart';
 import 'create_ticket_screen.dart';
 
 class OwnerHomeTab extends StatefulWidget {
@@ -38,51 +39,51 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
     final siteIds = widget.user.siteIds;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(t.tabHome),
-      ),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(title: Text(t.tabHome)),
       body: SafeArea(
         child: siteIds.isEmpty
             ? _noSitesView(t)
             : StreamBuilder<List<Ticket>>(
-                stream: _service.streamActiveTicketsForSites(siteIds),
-                builder: (context, snapshot) {
-                  final tickets = snapshot.data ?? [];
+          stream: _service.streamActiveTicketsForSites(siteIds),
+          builder: (context, snapshot) {
+            final tickets = snapshot.data ?? [];
 
-                  final pending = tickets
-                      .where((ticket) => ticket.status == 'pending')
-                      .length;
+            final pending = tickets
+                .where((ticket) => ticket.status == 'pending')
+                .length;
 
-                  final active = tickets
-                      .where((ticket) =>
-                          ticket.status == 'verified' ||
-                          ticket.status == 'pending_onsite' ||
-                          ticket.status == 'in_progress')
-                      .length;
+            final active = tickets
+                .where((ticket) =>
+            ticket.status == 'verified' ||
+                ticket.status == 'pending_onsite' ||
+                ticket.status == 'in_progress')
+                .length;
 
-                  final resolved = tickets
-                      .where((ticket) =>
-                          ticket.status == 'resolved' || ticket.status == 'closed')
-                      .length;
+            final resolved = tickets
+                .where((ticket) =>
+            ticket.status == 'resolved' ||
+                ticket.status == 'closed')
+                .length;
 
-                  return RefreshIndicator(
-                    onRefresh: () async {
-                      await Future.delayed(
-                          const Duration(milliseconds: 300));
-                    },
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        _welcomeCard(t),
-                        const SizedBox(height: 20),
-                        _statsRow(t, pending, active, resolved),
-                        const SizedBox(height: 24),
-                        _createButton(t),
-                      ],
-                    ),
-                  );
-                },
+            return RefreshIndicator(
+              onRefresh: () async {
+                await Future.delayed(
+                    const Duration(milliseconds: 300));
+              },
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _welcomeCard(t),
+                  const SizedBox(height: 20),
+                  _statsRow(t, pending, active, resolved),
+                  const SizedBox(height: 24),
+                  _createButton(t),
+                ],
               ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -173,52 +174,40 @@ class _OwnerHomeTabState extends State<OwnerHomeTab> {
     );
   }
 
-  Widget _statsRow(AppLocalizations t, int pending, int active, int resolved) {
+  Widget _statsRow(
+      AppLocalizations t, int pending, int active, int resolved) {
     return Row(
       children: [
         Expanded(
-          child: _statCard(t.pending, '$pending', AppColors.warning),
+          child: StatCard(
+            label: t.pending,
+            value: '$pending',
+            icon: Icons.pending_outlined,
+            color: AppColors.primary,
+            variant: StatCardVariant.blue,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _statCard(t.active, '$active', AppColors.accent),
+          child: StatCard(
+            label: t.active,
+            value: '$active',
+            icon: Icons.autorenew,
+            color: AppColors.accentDark,
+            variant: StatCardVariant.green,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _statCard(t.resolved, '$resolved', AppColors.success),
+          child: StatCard(
+            label: t.resolved,
+            value: '$resolved',
+            icon: Icons.check_circle_outline,
+            color: AppColors.accentDark,
+            variant: StatCardVariant.green,
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _statCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

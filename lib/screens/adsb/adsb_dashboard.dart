@@ -5,6 +5,8 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
+import '../../widgets/action_tile.dart';
+import '../../widgets/stat_card.dart';
 import '../common/ticket_history_screen.dart';
 import '../main_navigation.dart';
 import '../owner/owner_profile_tab.dart';
@@ -83,9 +85,8 @@ class _AdsbHome extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(t.supportTeam),
-      ),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(title: Text(t.supportTeam)),
       body: SafeArea(
         child: StreamBuilder<Map<String, int>>(
           stream: service.streamAdsbStats(),
@@ -130,18 +131,22 @@ class _AdsbHome extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _statCard(
-                        t.toVerify,
-                        '$verifyCount',
-                        AppColors.warning,
+                      child: StatCard(
+                        label: t.toVerify,
+                        value: '$verifyCount',
+                        icon: Icons.rule_outlined,
+                        color: AppColors.primary,
+                        variant: StatCardVariant.blue,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _statCard(
-                        t.onSiteQueued,
-                        '$onsiteCount',
-                        AppColors.accent,
+                      child: StatCard(
+                        label: t.onSiteQueued,
+                        value: '$onsiteCount',
+                        icon: Icons.location_on_outlined,
+                        color: AppColors.accentDark,
+                        variant: StatCardVariant.green,
                       ),
                     ),
                   ],
@@ -155,26 +160,26 @@ class _AdsbHome extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _actionTile(
-                  context,
-                  Icons.support_agent,
-                  t.verificationQueue,
-                  t.ticketDetailsHint,
-                  AppColors.primary,
-                      () => Navigator.push(
+                ActionTile(
+                  icon: Icons.support_agent,
+                  title: t.verificationQueue,
+                  subtitle: t.ticketDetailsHint,
+                  accentColor: AppColors.primary,
+                  variant: ActionTileVariant.blue,
+                  onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => AdsbQueueScreen(user: user),
                     ),
                   ),
                 ),
-                _actionTile(
-                  context,
-                  Icons.location_on_outlined,
-                  t.onSiteJobs,
-                  t.jobsVisitHint,
-                  AppColors.accent,
-                      () => Navigator.push(
+                ActionTile(
+                  icon: Icons.location_on_outlined,
+                  title: t.onSiteJobs,
+                  subtitle: t.jobsVisitHint,
+                  accentColor: AppColors.accentDark,
+                  variant: ActionTileVariant.green,
+                  onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => OnsiteQueueScreen(user: user),
@@ -184,100 +189,6 @@ class _AdsbHome extends StatelessWidget {
               ],
             );
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _statCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionTile(
-      BuildContext context,
-      IconData icon,
-      String title,
-      String subtitle,
-      Color color,
-      VoidCallback onTap,
-      ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
-            ),
-          ],
         ),
       ),
     );

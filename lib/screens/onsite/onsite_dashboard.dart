@@ -6,8 +6,10 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../../services/ticket_service.dart';
-import '../owner/owner_profile_tab.dart';
+import '../../widgets/action_tile.dart';
+import '../../widgets/stat_card.dart';
 import '../main_navigation.dart';
+import '../owner/owner_profile_tab.dart';
 import 'onsite_queue_screen.dart';
 
 class OnsiteDashboard extends StatefulWidget {
@@ -37,12 +39,12 @@ class _OnsiteDashboardState extends State<OnsiteDashboard> {
             builder: (context, snapshot) {
               final tickets = snapshot.data ?? [];
               final unclaimed = tickets
-                  .where((t) => t.status == 'pending_onsite')
+                  .where((tk) => tk.status == 'pending_onsite')
                   .length;
               final myJobs = tickets
-                  .where((t) =>
-              t.status == 'in_progress' &&
-                  t.assignedTo == widget.user.email)
+                  .where((tk) =>
+              tk.status == 'in_progress' &&
+                  tk.assignedTo == widget.user.email)
                   .length;
               return _OnsiteHome(
                 user: widget.user,
@@ -96,6 +98,7 @@ class _OnsiteHome extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(t.tabOnSite)),
       body: SafeArea(
         child: ListView(
@@ -143,20 +146,22 @@ class _OnsiteHome extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _statCard(
+                  child: StatCard(
                     label: t.unclaimed,
                     value: '$unclaimedCount',
-                    color: AppColors.warning,
                     icon: Icons.inbox_outlined,
+                    color: AppColors.warning,
+                    variant: StatCardVariant.warning,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _statCard(
+                  child: StatCard(
                     label: t.myJobs,
                     value: '$myJobsCount',
-                    color: AppColors.primary,
                     icon: Icons.work_outline,
+                    color: AppColors.primary,
+                    variant: StatCardVariant.blue,
                   ),
                 ),
               ],
@@ -170,119 +175,18 @@ class _OnsiteHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _actionTile(
-              context,
-              Icons.work_outline,
-              t.myJobsTitle,
-              t.viewJobsHint,
-              AppColors.primary,
-                  () => Navigator.push(
+            ActionTile(
+              icon: Icons.work_outline,
+              title: t.myJobsTitle,
+              subtitle: t.viewJobsHint,
+              accentColor: AppColors.primary,
+              variant: ActionTileVariant.blue,
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => OnsiteQueueScreen(user: user),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statCard({
-    required String label,
-    required String value,
-    required Color color,
-    required IconData icon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionTile(
-      BuildContext context,
-      IconData icon,
-      String title,
-      String subtitle,
-      Color color,
-      VoidCallback onTap,
-      ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
             ),
           ],
         ),
