@@ -156,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // Layer 2 — dark overlay for readability
           Container(
-            color: Colors.black.withOpacity(0.45),
+            color: Colors.black.withOpacity(0.25),
           ),
 
           // Layer 3 — form content
@@ -176,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.xl),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Colors.white.withOpacity(0.65),
                           borderRadius:
                           BorderRadius.circular(AppRadii.xl),
                           boxShadow: AppShadows.large,
