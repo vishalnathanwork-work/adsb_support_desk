@@ -92,15 +92,15 @@ class ClientProfileTab extends StatelessWidget {
                 Icons.lock_reset,
                 color: AppColors.primary,
               ),
-              title: const Text(
-                'Change Password',
+              title: Text(
+                t.changePassword,
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
                 ),
               ),
-              subtitle: const Text(
-                'Update your login password',
+              subtitle: Text(
+                t.updateLoginPassword,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -116,19 +116,33 @@ class ClientProfileTab extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          SizedBox(
-            height: 50,
-            child: OutlinedButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout, color: AppColors.error),
-              label: Text(
-                t.logOut,
-                style: const TextStyle(color: AppColors.error),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.error),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Center(
+            child: FractionallySizedBox(
+              widthFactor: 0.6,
+              child: SizedBox(
+                height: 60,
+                child: ElevatedButton.icon(
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout),
+                  label: Text(
+                    t.logOut,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.surface,
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    side: const BorderSide(
+                      color: AppColors.errorLight,
+                      width: 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
                 ),
               ),
             ),

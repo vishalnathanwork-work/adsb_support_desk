@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "519672171004",
+    "project_id": "adsb-support-desk",
+    "storage_bucket": "adsb-support-desk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:519672171004:android:656ed888338909fdd7ca79",
+        "android_client_info": {
+          "package_name": "com.example.adsb_support_desk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "519672171004-vo96gbfbhss68uh2runlts849tn62eqq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwImJHImHzyO2YpYpcmFmt_eWnXEpnzbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "519672171004-vo96gbfbhss68uh2runlts849tn62eqq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "519672171004-jinrvq9eq4r4ep5jo1madbgtfrhelc8n.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.adsbSupportDesk"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

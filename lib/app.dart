@@ -13,6 +13,8 @@ import 'screens/adsb/adsb_dashboard.dart';
 import 'screens/technician/technician_dashboard.dart';
 import 'screens/onsite/onsite_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
+import 'services/session_service.dart';
+import 'services/session_guard_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -28,6 +30,42 @@ class _AdsbSupportAppState extends State<AdsbSupportApp> {
   void initState() {
     super.initState();
     LocaleController.instance.load();
+
+    SessionGuardService().onSessionInvalidated = _handleSessionInvalidated;
+  }
+
+  Future<void> _handleSessionInvalidated() async {
+    // Clear local session storage
+    await SessionService().clear();
+
+    // Show a dialog and route to login
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+
+    // Wait for any pending navigation to settle
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Show a dialog on top of whatever is showing
+    showDialog(
+      context: nav.context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Session Ended'),
+        content: const Text(
+          'Your account was signed in on another device. '
+              'You have been logged out here.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(nav.context).pop();
+              nav.pushNamedAndRemoveUntil('/login', (r) => false);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ═══════════════════════════════════════════════════
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUser().role == 'admin';
+    }
+
+    function isActive() {
+      return isSignedIn() && getUser().is_active == true;
+    }
+
+    function userRole() {
+      return getUser().role;
+    }
+
+    function userEmail() {
+      return getUser().email;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // USERS
+    // ═══════════════════════════════════════════════════
+
+    match /users/{uid} {
+      allow read: if isSignedIn() &&
+                    (request.auth.uid == uid || isAdmin());
+
+      allow create: if isSignedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.username is string
+                    && request.resource.data.username.size() >= 3
+                    && request.resource.data.is_active == false
+                    && request.resource.data.approval_status == 'pending'
+                    && request.resource.data.role == 'owner'
+                    && request.resource.data.phone is string
+                    && request.resource.data.phone.size() >= 8
+                    && request.resource.data.remark is string
+                    && request.resource.data.remark.size() > 0
+                    && request.resource.data.is_verified == false;
+
+      allow update: if
+        (isAdmin() &&
+         !(
+           request.resource.data.approval_status == 'approved' &&
+           request.resource.data.is_active == true &&
+           request.resource.data.is_verified != true
+         ))
+        ||
+        (request.auth.uid == uid &&
+         request.resource.data.diff(resource.data)
+           .affectedKeys()
+           .hasOnly([
+             'active_session',
+             'active_session_at',
+             'phone',
+             'updated_at',
+           ]));
+
+      allow delete: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // TICKETS
+    // ═══════════════════════════════════════════════════
+
+    match /tickets/{ticketId} {
+      allow read: if isActive();
+      allow create: if isActive();
+      allow update: if isActive();
+      allow delete: if isActive() && isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // CHAT MESSAGES
+    // ═══════════════════════════════════════════════════
+
+    match /chat_messages/{msgId} {
+      allow read: if isActive();
+      allow create: if isActive();
+      allow update, delete: if isActive() && isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // NOTIFICATIONS
+    // ═══════════════════════════════════════════════════
+
+    match /notifications/{notifId} {
+      allow read: if isActive() &&
+                    (resource.data.user_email == userEmail() ||
+                     isAdmin());
+      allow update: if isActive() &&
+                      (resource.data.user_email == userEmail() ||
+                       isAdmin());
+      allow create: if isActive();
+      allow delete: if isActive() && isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // FCM TOKENS
+    // ═══════════════════════════════════════════════════
+
+    match /fcm_tokens/{safeEmail} {
+      allow read, write: if isActive();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // CHAT VIEWERS (presence)
+    // ═══════════════════════════════════════════════════
+
+    match /chat_viewers/{uid} {
+      allow read, write: if isActive();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // PRESETS / CLIENTS / SITES  (admin-write, everyone-read)
+    // ═══════════════════════════════════════════════════
+
+    match /presets/{presetId} {
+      allow read: if isActive();
+      allow write: if isActive() && isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read: if isActive();
+      allow write: if isActive() && isAdmin();
+    }
+
+    match /sites/{siteId} {
+      allow read: if isActive();
+      allow write: if isActive() && isAdmin();
+    }
+  }
+}

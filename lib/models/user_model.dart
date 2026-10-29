@@ -1,19 +1,17 @@
 class UserModel {
-  final String email;         // internal only — <username>@adsb.local
-  final String username;      // what the user types to log in
+  final String email;
+  final String username;
   final String name;
-  final String role; // owner | operator | adsb | technician | onsite | admin
+  final String role;
   final String? phone;
   final String? company;
   final String? remark;
   final bool isActive;
+  final bool isVerified;      // ⭐ NEW
   final List<String> siteIds;
   final String? clientId;
   final String? clientName;
-
-  /// 'pending' | 'approved' | 'rejected'
   final String approvalStatus;
-
   final DateTime? registeredAt;
   final DateTime? approvedAt;
   final String? approvedBy;
@@ -27,6 +25,7 @@ class UserModel {
     this.company,
     this.remark,
     this.isActive = true,
+    this.isVerified = false,    // ⭐ NEW
     this.siteIds = const [],
     this.clientId,
     this.clientName,
@@ -45,6 +44,7 @@ class UserModel {
     'company': company,
     'remark': remark,
     'is_active': isActive,
+    'is_verified': isVerified,   // ⭐ NEW
     'site_ids': siteIds,
     'client_id': clientId,
     'client_name': clientName,
@@ -63,6 +63,7 @@ class UserModel {
     company: json['company'] ?? json['remark'],
     remark: json['remark'],
     isActive: json['is_active'] ?? true,
+    isVerified: json['is_verified'] == true,   // ⭐ NEW
     siteIds: _parseStringList(json['site_ids']),
     clientId: json['client_id'],
     clientName: json['client_name'],
@@ -90,16 +91,13 @@ class UserModel {
     }
   }
 
-  // ─── Approval helpers ───
   bool get isPendingApproval =>
       approvalStatus == 'pending' || !isActive;
 
-  bool get isApproved =>
-      approvalStatus == 'approved' && isActive;
+  bool get isApproved => approvalStatus == 'approved' && isActive;
 
   bool get isRejected => approvalStatus == 'rejected';
 
-  // ─── Role helpers ───
   bool get isOwner => role == 'owner';
   bool get isOperator => role == 'operator';
   bool get isAdsbTeam => role == 'adsb';
@@ -116,29 +114,20 @@ class UserModel {
 
   String get roleDisplayName {
     switch (role) {
-      case 'owner':
-        return 'Site Owner';
-      case 'operator':
-        return 'Site Operator';
-      case 'adsb':
-        return 'ADSB Support Team';
-      case 'technician':
-        return 'Technical Advisor';
-      case 'onsite':
-        return 'On-Site Team';
-      case 'admin':
-        return 'Administrator';
-      default:
-        return 'User';
+      case 'owner': return 'Site Owner';
+      case 'operator': return 'Site Operator';
+      case 'adsb': return 'ADSB Support Team';
+      case 'technician': return 'Technical Advisor';
+      case 'onsite': return 'On-Site Team';
+      case 'admin': return 'Administrator';
+      default: return 'User';
     }
   }
 
   String get chatLabel {
     switch (role) {
-      case 'owner':
-        return 'Site Owner';
-      case 'operator':
-        return 'Site Operator';
+      case 'owner': return 'Site Owner';
+      case 'operator': return 'Site Operator';
       case 'adsb':
       case 'technician':
       case 'onsite':

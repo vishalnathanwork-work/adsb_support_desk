@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
+import '../l10n/app_localizations.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
@@ -8,7 +9,8 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, fg, bg) = _style();
+    final t = AppLocalizations.of(context)!;
+    final (label, fg, bg) = _style(t);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -27,24 +29,56 @@ class StatusBadge extends StatelessWidget {
     );
   }
 
-  (String, Color, Color) _style() {
+  (String, Color, Color) _style(AppLocalizations t) {
     switch (status) {
       case 'pending':
-        return ('Pending', AppColors.warning, AppColors.warningLight);
+        return (
+        t.statusPendingLabel,
+        AppColors.warning,
+        AppColors.warningLight,
+        );
       case 'verified':
-        return ('In Review', AppColors.info, AppColors.infoLight);
+        return (
+        t.statusVerifiedLabel,
+        AppColors.info,
+        AppColors.infoLight,
+        );
       case 'pending_onsite':
-        return ('On-Site Queued', AppColors.primary, const Color(0xFFDBEAFE));
+        return (
+        t.statusPendingOnsiteLabel,
+        AppColors.primary,
+        const Color(0xFFDBEAFE),
+        );
       case 'in_progress':
-        return ('In Progress', AppColors.primary, const Color(0xFFDBEAFE));
+        return (
+        t.statusInProgressLabel,
+        AppColors.primary,
+        const Color(0xFFDBEAFE),
+        );
       case 'resolved':
-        return ('Resolved', AppColors.success, AppColors.successLight);
+        return (
+        t.statusResolvedLabel,
+        AppColors.success,
+        AppColors.successLight,
+        );
       case 'closed':
-        return ('Closed', AppColors.textSecondary, AppColors.surfaceAlt);
+        return (
+        t.statusClosedLabel,
+        AppColors.textSecondary,
+        AppColors.surfaceAlt,
+        );
       case 'reopened':
-        return ('Reopened', AppColors.error, AppColors.errorLight);
+        return (
+        t.statusReopenedLabel,
+        AppColors.error,
+        AppColors.errorLight,
+        );
       case 'cancelled':
-        return ('Cancelled', AppColors.textSecondary, AppColors.surfaceAlt);
+        return (
+        t.statusCancelledLabel,
+        AppColors.textSecondary,
+        AppColors.surfaceAlt,
+        );
       default:
         return (status, AppColors.textSecondary, AppColors.surfaceAlt);
     }

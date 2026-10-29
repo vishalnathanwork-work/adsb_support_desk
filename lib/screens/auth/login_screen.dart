@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../config/locale_controller.dart';
@@ -12,6 +11,7 @@ import '../../utils/role_router.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/custom_text_field.dart';
 import 'register_screen.dart';
+import 'verify_email_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,6 +40,130 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ═══════════════════════════════════════════════
+  // PASSWORD RESET DIALOG
+  // ═══════════════════════════════════════════════
+
+  Future<void> _showPasswordResetDialog() async {
+    final t = AppLocalizations.of(context)!;
+    final emailController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isSending = false;
+    String? serviceErrorMessage;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> submit() async {
+                setDialogState(() => serviceErrorMessage = null);
+
+                if (!formKey.currentState!.validate()) return;
+
+                setDialogState(() => isSending = true);
+
+                final result = await _authService.sendPasswordResetEmail(
+                  emailController.text,
+                );
+
+                if (!dialogContext.mounted) return;
+
+                if (result.success) {
+                  Navigator.of(dialogContext).pop();
+                  if (!mounted) return;
+                  _snack(
+                    result.message ?? t.emailSentSuccess,
+                    AppColors.success,
+                  );
+                } else {
+                  setDialogState(() {
+                    isSending = false;
+                    serviceErrorMessage = result.message;
+                  });
+                }
+              }
+
+              return AlertDialog(
+                title: Text(t.resetPassword),
+                content: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.resetPasswordMessage,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: emailController,
+                        autofocus: true,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.done,
+                        enabled: !isSending,
+                        decoration: InputDecoration(
+                          labelText: t.email,
+                          hintText: t.emailHint,
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          errorText: serviceErrorMessage,
+                        ),
+                        onFieldSubmitted: (_) => submit(),
+                        validator: (v) {
+                          final value = v?.trim() ?? '';
+                          if (value.isEmpty) {
+                            return t.emailRequired;
+                          }
+                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                              .hasMatch(value)) {
+                            return t.emailInvalid;
+                          }
+                          if (serviceErrorMessage != null) {
+                            setDialogState(
+                                    () => serviceErrorMessage = null);
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSending
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: Text(t.cancelLabel),
+                  ),
+                  TextButton(
+                    onPressed: isSending ? null : submit,
+                    child: isSending
+                        ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2),
+                    )
+                        : Text(t.sendResetEmail),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      emailController.dispose();
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // LOGIN
+  // ═══════════════════════════════════════════════
+
   Future<void> _finishLogin(AuthResult result) async {
     if (result.success && result.user != null) {
       if (_rememberMe) {
@@ -67,6 +191,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       RoleRouter.goToDashboard(context, result.user!);
+    } else if (result.message == 'EMAIL_NOT_VERIFIED') {
+      // ⭐ Route to VerifyEmailScreen
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerifyEmailScreen(
+            email: _usernameController.text.trim().toLowerCase(),
+          ),
+        ),
+      );
     } else {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -96,6 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _snack(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: color),
     );
@@ -103,27 +240,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _showLanguagePicker() async {
     await LocaleController.instance.showLanguagePicker(context);
-  }
-
-  Future<void> _openAdminWhatsApp() async {
-    final number = AppConstants.adminWhatsAppNumber;
-    final message = Uri.encodeComponent(AppConstants.adminWhatsAppMessage);
-    final whatsappUri = Uri.parse('https://wa.me/$number?text=$message');
-
-    try {
-      if (await canLaunchUrl(whatsappUri)) {
-        await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
-      } else {
-        if (!mounted) return;
-        _snack(
-          'WhatsApp is not installed on this device.',
-          AppColors.warning,
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _snack('Could not open WhatsApp: $e', AppColors.error);
-    }
   }
 
   @override
@@ -134,12 +250,9 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
-
-      // ⭐ LOGIN-SPECIFIC BACKGROUND
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Layer 1 — login background image
           Image.asset(
             'assets/images/login_register_background.jpg',
             fit: BoxFit.cover,
@@ -153,13 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-
-          // Layer 2 — dark overlay for readability
-          Container(
-            color: Colors.black.withOpacity(0.25),
-          ),
-
-          // Layer 3 — form content
+          Container(color: Colors.black.withOpacity(0.25)),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -188,14 +295,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             CrossAxisAlignment.stretch,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // ─── Language chip ───
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: GestureDetector(
                                   onTap: _showLanguagePicker,
                                   child: Container(
-                                    padding:
-                                    const EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                       vertical: 6,
                                     ),
@@ -260,14 +365,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 28),
 
                               CustomTextField(
-                                label: 'Username',
-                                hint: 'e.g. ahmad123',
-                                icon: Icons.person_outline,
+                                label: t.email,
+                                hint: t.emailHint,
+                                icon: Icons.email_outlined,
                                 controller: _usernameController,
-                                keyboardType: TextInputType.text,
+                                keyboardType: TextInputType.emailAddress,
                                 validator: (v) {
                                   if (v == null || v.trim().isEmpty) {
-                                    return 'Username is required';
+                                    return t.emailRequired;
                                   }
                                   return null;
                                 },
@@ -313,8 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       value: _rememberMe,
                                       activeColor: AppColors.primary,
                                       materialTapTargetSize:
-                                      MaterialTapTargetSize
-                                          .shrinkWrap,
+                                      MaterialTapTargetSize.shrinkWrap,
                                       shape: RoundedRectangleBorder(
                                         borderRadius:
                                         BorderRadius.circular(4),
@@ -326,8 +430,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     t.rememberMe,
-                                    style:
-                                    const TextStyle(fontSize: 13),
+                                    style: const TextStyle(fontSize: 13),
                                   ),
                                 ],
                               ),
@@ -393,15 +496,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: TextButton.icon(
                                   onPressed: busy
                                       ? null
-                                      : _openAdminWhatsApp,
+                                      : _showPasswordResetDialog,
                                   icon: const Icon(
-                                    Icons.chat_bubble_outline,
+                                    Icons.lock_reset,
                                     size: 16,
                                     color: AppColors.primary,
                                   ),
-                                  label: const Text(
-                                    'Forgot password? Chat with admin',
-                                    style: TextStyle(
+                                  label: Text(
+                                    t.forgotPassword,
+                                    style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.primary,
@@ -415,8 +518,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     minimumSize: const Size(0, 0),
                                     tapTargetSize:
-                                    MaterialTapTargetSize
-                                        .shrinkWrap,
+                                    MaterialTapTargetSize.shrinkWrap,
                                   ),
                                 ),
                               ),
@@ -424,7 +526,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                               Center(
                                 child: Text(
-                                  'Version ${AppConstants.appVersion}',
+                                  t.version(AppConstants.appVersion),
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textTertiary,

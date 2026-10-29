@@ -74,6 +74,7 @@ class UserService {
     try {
       final snap = await _col
           .where('approval_status', isEqualTo: 'pending')
+          .where('is_verified', isEqualTo: true)   // ⭐ FILTER
           .get();
       final list = snap.docs
           .map((d) => <String, dynamic>{'uid': d.id, ...d.data()})
@@ -85,9 +86,7 @@ class UserService {
         if (aTime == null) return 1;
         if (bTime == null) return -1;
         try {
-          return (bTime as dynamic)
-              .toDate()
-              .compareTo((aTime as dynamic).toDate());
+          return (bTime as dynamic).toDate().compareTo((aTime as dynamic).toDate());
         } catch (_) {
           return 0;
         }
@@ -103,6 +102,7 @@ class UserService {
     try {
       final snap = await _col
           .where('approval_status', isEqualTo: 'pending')
+          .where('is_verified', isEqualTo: true)   // ⭐ FILTER
           .count()
           .get();
       return snap.count ?? 0;
@@ -110,6 +110,31 @@ class UserService {
       print('getPendingUsersCount error: $e');
       return 0;
     }
+  }
+
+  Stream<List<Map<String, dynamic>>> streamPendingUsers() {
+    return _col
+        .where('approval_status', isEqualTo: 'pending')
+        .where('is_verified', isEqualTo: true)   // ⭐ FILTER
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((d) => <String, dynamic>{'uid': d.id, ...d.data()})
+          .toList();
+      list.sort((a, b) {
+        final aTime = a['registered_at'];
+        final bTime = b['registered_at'];
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        try {
+          return (bTime as dynamic).toDate().compareTo((aTime as dynamic).toDate());
+        } catch (_) {
+          return 0;
+        }
+      });
+      return list;
+    });
   }
 
   Future<bool> approveUser({
@@ -135,8 +160,16 @@ class UserService {
       }
 
       final userDoc = await _col.doc(uid).get();
-      final userEmail = userDoc.data()?['email'] as String? ?? '';
-      final userName = userDoc.data()?['name'] as String? ?? 'User';
+      final userData = userDoc.data();
+
+      // ⭐ BLOCK APPROVING UNVERIFIED USERS
+      if (userData?['is_verified'] != true) {
+        print('approveUser error: user is not verified');
+        return false;
+      }
+
+      final userEmail = userData?['email'] as String? ?? '';
+      final userName = userData?['name'] as String? ?? 'User';
 
       await _col.doc(uid).update({
         'is_active': true,
@@ -191,12 +224,10 @@ class UserService {
     }
   }
 
-  // ═══════════════════════════════════════════════
-  // ADMIN — CREATE USER (Cloud Function)
-  // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+// ADMIN — CREATE USER (Cloud Function)
+// ═══════════════════════════════════════════════
 
-  /// Creates a user in Firebase Auth + Firestore via Cloud Function.
-  /// Returns the new UID or null on failure.
   Future<({String? uid, String? error})> adminCreateUser({
     required String email,
     required String password,
@@ -208,8 +239,10 @@ class UserService {
     List<String> siteIds = const [],
   }) async {
     try {
-      final callable =
-      FirebaseFunctions.instance.httpsCallable('adminCreateUser');
+      // ⭐ MUST use asia-southeast1 — matches the Cloud Function's region
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('adminCreateUser');
 
       final result = await callable.call({
         'email': email,
@@ -223,12 +256,43 @@ class UserService {
       });
 
       final uid = result.data['uid'] as String?;
+      if (uid == null || uid.isEmpty) {
+        return (uid: null, error: 'Server did not return a user ID.');
+      }
       return (uid: uid, error: null);
     } on FirebaseFunctionsException catch (e) {
-      print('adminCreateUser error: ${e.code} - ${e.message}');
-      return (uid: null, error: e.message ?? 'Failed to create user');
+      print('adminCreateUser FAILED: code=${e.code}, message=${e.message}');
+
+      String message;
+      switch (e.code) {
+        case 'not-found':
+          message = 'Cloud Function not found. Deploy adminCreateUser to '
+              'asia-southeast1, then try again.';
+          break;
+        case 'unauthenticated':
+          message = 'You must be signed in to create users.';
+          break;
+        case 'permission-denied':
+          message = 'Only administrators can create users.';
+          break;
+        case 'already-exists':
+          message = 'This email is already registered. Use a different email.';
+          break;
+        case 'invalid-argument':
+          message = e.message ?? 'Invalid input. Check email and password.';
+          break;
+        case 'internal':
+          message = e.message ?? 'Server error. Please try again.';
+          break;
+        case 'unavailable':
+          message = 'Network error. Check your connection.';
+          break;
+        default:
+          message = e.message ?? 'Failed to create user (${e.code}).';
+      }
+      return (uid: null, error: message);
     } catch (e) {
-      print('adminCreateUser error: $e');
+      print('adminCreateUser unexpected error: $e');
       return (uid: null, error: 'Unexpected error: $e');
     }
   }
@@ -303,36 +367,6 @@ class UserService {
       print('deleteUser error: $e');
       return false;
     }
-  }
-
-  /// Real-time stream of pending registrations.
-  /// Used by AdminUsersScreen to auto-refresh when someone registers.
-  Stream<List<Map<String, dynamic>>> streamPendingUsers() {
-    return _col
-        .where('approval_status', isEqualTo: 'pending')
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs
-          .map((d) => <String, dynamic>{'uid': d.id, ...d.data()})
-          .toList();
-
-      // Newest first
-      list.sort((a, b) {
-        final aTime = a['registered_at'];
-        final bTime = b['registered_at'];
-        if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        try {
-          return (bTime as dynamic)
-              .toDate()
-              .compareTo((aTime as dynamic).toDate());
-        } catch (_) {
-          return 0;
-        }
-      });
-      return list;
-    });
   }
 
   // ═══════════════════════════════════════════════

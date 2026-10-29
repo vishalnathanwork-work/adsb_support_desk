@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import '../models/ticket_model.dart';
 import '../utils/date_formatter.dart';
+import '../utils/ticket_localizer.dart';
 import 'status_badge.dart';
 
 class TicketCard extends StatelessWidget {
@@ -16,6 +17,17 @@ class TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = Localizations.localeOf(context);
+    final localizer = TicketLocalizer();
+
+    // Translate canonical English values stored in Firestore to the
+    // current locale. Falls back to the original English string if the
+    // preset has no Malay translation.
+    final localizedProductType =
+    localizer.productType(ticket.productType, locale);
+    final localizedProductIssue =
+    localizer.productIssue(ticket.productIssue, locale);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Material(
@@ -52,9 +64,9 @@ class TicketCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // ─── Product + Issue ───
+                // ─── Product + Issue (localized display) ───
                 Text(
-                  ticket.productType,
+                  localizedProductType,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -63,7 +75,7 @@ class TicketCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  ticket.productIssue,
+                  localizedProductIssue,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,

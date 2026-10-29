@@ -1,3 +1,17 @@
+println("BEFORE: ANDROID_PREFS_ROOT=${System.getenv("ANDROID_PREFS_ROOT")}, ANDROID_USER_HOME=${System.getenv("ANDROID_USER_HOME")}")
+try {
+    val pe = Class.forName("java.lang.ProcessEnvironment")
+    val f = pe.getDeclaredField("theCaseInsensitiveEnvironment")
+    f.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val map = f.get(null) as MutableMap<String, String>
+    map.remove("ANDROID_PREFS_ROOT")
+    println("REMOVED ANDROID_PREFS_ROOT from theCaseInsensitiveEnvironment")
+} catch (t: Throwable) {
+    println("FAILED TO REMOVE ENV: $t")
+}
+println("AFTER: ANDROID_PREFS_ROOT=${System.getenv("ANDROID_PREFS_ROOT")}")
+
 pluginManagement {
     val flutterSdkPath =
         run {

@@ -79,7 +79,7 @@
   "allTicketsTitle": "All Tickets",
   "allTicketsHint": "View and manage all tickets",
   "teamManagement": "Team Management",
-  "teamManagementHint": "ADSB Members + TT Members",
+  "teamManagementHint": "ADSB Members + Advisors",
   "userManagement": "User Management",
   "userManagementHint": "Owner and Operators",
   "clientsTitle": "Clients",
@@ -94,12 +94,23 @@
   "createAccount": "Create Account",
   "createAccountSubtitle": "Your request will be reviewed by our team",
 
+  "usernameLabel": "Username",
+  "usernameHint": "e.g. ahmad123",
+  "usernameMin3": "Must be at least 3 characters",
+  "usernameInvalidChars": "Letters, numbers, dots and underscores only",
+  "usernameHelper": "Used for sign-in instead of email",
+  "usernameTaken": "Username is already taken",
+
   "fullName": "Full Name",
   "fullNameHint": "e.g. Ahmad bin Abdullah",
   "emailLabel": "Email",
   "emailHintRegister": "you@company.com",
   "passwordLabel": "Password",
   "passwordHintRegister": "Minimum 6 characters",
+  "confirmPasswordLabel": "Confirm Password",
+  "confirmPasswordHint": "Re-enter your password",
+  "pleaseConfirmPassword": "Please confirm your password",
+  "passwordsDoNotMatch": "Passwords do not match",
   "phoneNumber": "Phone Number",
   "phoneHint": "+60 12-345 6789",
   "phoneInvalid": "Enter a valid phone number",
@@ -138,6 +149,11 @@
   "sitesLabel": "Sites",
   "sitesCountOne": "1 site",
   "sitesCountMany": "{count} sites",
+  "@sitesCountMany": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "statusLabel": "Status",
   "statusPending": "PENDING",
   "refreshStatus": "Refresh Status",
@@ -169,6 +185,12 @@
   "noIssuesConfigured": "No issues configured for this product type. Contact admin.",
   "photosOptional": "Photos (Optional)",
   "photosCount": "{count} / {max} photos",
+  "@photosCount": {
+    "placeholders": {
+      "count": { "type": "String" },
+      "max": { "type": "String" }
+    }
+  },
   "addPhoto": "Add Photo",
   "takePhoto": "Take Photo",
   "chooseFromGallery": "Choose from Gallery",
@@ -190,6 +212,11 @@
   "ticketSubmittedMessage": "Our team will verify your issue and get back to you shortly.",
   "ok": "OK",
   "maxPhotosReached": "Maximum {count} photos",
+  "@maxPhotosReached": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
 
   "ticketDetails": "Ticket Details",
   "openChat": "Open Chat",
@@ -226,12 +253,17 @@
   "chatClosed": "Chat closed — this ticket is complete.",
   "chatReadOnly": "This ticket is closed. Chat is read-only.",
   "attachmentsLimit": "Maximum {count} attachments",
+  "@attachmentsLimit": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "ticketSummary": "Ticket Summary",
   "clientDetails": "Client Details",
 
   "adsbQueue": "Verification Queue",
   "adsbPending": "Pending",
-  "adsbWithTt": "With TT",
+  "adsbWithTt": "In Review",
   "adsbOnSite": "On-Site",
   "adsbAllActive": "All Active",
   "allCaughtUp": "All caught up!",
@@ -244,6 +276,11 @@
   "notAvailableStatus": "Not available for current status",
   "callClient": "Call Client",
   "cannotCall": "Cannot call {phone}",
+  "@cannotCall": {
+    "placeholders": {
+      "phone": { "type": "String" }
+    }
+  },
   "resolveRemotelyTitle": "Resolve Remotely?",
   "resolveRemotelyMessage": "Mark this ticket as resolved. The client will be asked to confirm.",
   "yesResolve": "Yes, Resolve",
@@ -259,6 +296,11 @@
   "ttNoAwaiting": "No tickets awaiting your review",
   "ttTryChangeFilter": "Try changing your filter",
   "ttReportedBy": "Reported by {name}",
+  "@ttReportedBy": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "ttNotAvailable": "Not available for current status",
 
   "onsiteQueue": "On-Site Jobs",
@@ -283,6 +325,11 @@
   "onsiteSolutionHint": "Solution Hint",
   "onsiteReportedPhotos": "Reported Photo Evidence",
   "onsiteJobStatus": "This job is {status}.",
+  "@onsiteJobStatus": {
+    "placeholders": {
+      "status": { "type": "String" }
+    }
+  },
 
   "completionFormTitle": "Job Completion",
   "completionRootCause": "Root Cause",
@@ -319,14 +366,29 @@
   "adminSearchSites": "Search sites by name or address...",
   "adminDeleteClient": "Delete client?",
   "adminDeleteClientMessage": "Delete \"{name}\" permanently?",
+  "@adminDeleteClientMessage": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "adminDeleteSite": "Delete site?",
   "adminDeleteSiteMessage": "Delete \"{name}\" permanently?",
+  "@adminDeleteSiteMessage": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "adminCancel": "Cancel",
   "adminDelete": "Delete",
   "adminClientDeleted": "Client deleted",
   "adminSiteDeleted": "Site deleted",
   "adminDeleteFailed": "Delete failed",
   "adminCannotDelete": "Cannot delete: {reason}",
+  "@adminCannotDelete": {
+    "placeholders": {
+      "reason": { "type": "String" }
+    }
+  },
   "adminSearchUsers": "Search by name or email...",
   "adminAllRoles": "All Roles",
   "adminSiteOwners": "Site Owners",
@@ -346,9 +408,19 @@
   "adminNoTeamHint": "Tap + Add Member to create one",
   "adminDeleteUserTitle": "Delete user?",
   "adminDeleteUserMessage": "{name} will be removed from the system and can no longer log in.",
+  "@adminDeleteUserMessage": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "adminDeleteUserWarning": "Their Firebase Auth account must be deleted separately in Firebase Console → Authentication.",
   "adminDeactivateTitle": "Deactivate user?",
   "adminDeactivateMessage": "{name} will no longer be able to log in.",
+  "@adminDeactivateMessage": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "adminDeactivate": "Deactivate",
   "adminReactivate": "Reactivate Account",
   "adminDeactivateBtn": "Deactivate Account",
@@ -372,7 +444,7 @@
   "adminDeleteTicketFailed": "Failed to delete ticket",
 
   "statusPendingLabel": "Pending Verification",
-  "statusVerifiedLabel": "Verified (with TT)",
+  "statusVerifiedLabel": "In Review",
   "statusPendingOnsiteLabel": "Pending On-Site",
   "statusInProgressLabel": "On-Site In Progress",
   "statusResolvedLabel": "Resolved",
@@ -418,7 +490,11 @@
   "onsiteJobNotFoundTitle": "Job",
 
   "escalatedBy": "Escalated by {name}",
-  "@escalatedBy": { "placeholders": { "name": { "type": "String" } } },
+  "@escalatedBy": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "technicianAdviceHint": "Provide your advice directly in the chat. The ADSB team will act on it and update the client.",
 
   "chatAttachTitle": "Attach",
@@ -433,11 +509,23 @@
   "chatTapToOpen": "Tap to open",
   "chatFileUnavailable": "This file was uploaded on another device or has been cleared. It will be available once cloud storage is enabled.",
   "chatCannotOpenFile": "Could not open the file. {error}",
-  "@chatCannotOpenFile": { "placeholders": { "error": { "type": "String" } } },
+  "@chatCannotOpenFile": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
   "chatErrorOpening": "Error opening file: {error}",
-  "@chatErrorOpening": { "placeholders": { "error": { "type": "String" } } },
+  "@chatErrorOpening": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
   "chatCannotOpenNamed": "Cannot open {name}",
-  "@chatCannotOpenNamed": { "placeholders": { "name": { "type": "String" } } },
+  "@chatCannotOpenNamed": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
 
   "imageNotAvailable": "Image not available",
 
@@ -458,13 +546,21 @@
   "approvalRejectFailed": "Reject failed",
   "approvalRejectTitle": "Reject this user?",
   "approvalRejectMessage": "{name} will be removed from the system. They will not be able to log in.",
-  "@approvalRejectMessage": { "placeholders": { "name": { "type": "String" } } },
+  "@approvalRejectMessage": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "approvalApprove": "Approve",
   "approvalReject": "Reject",
   "approvalRequested": "Requested",
   "approvalRequestedNone": "No sites specified",
   "approvalRequestedCount": "{n} site(s)",
-  "@approvalRequestedCount": { "placeholders": { "n": { "type": "String" } } },
+  "@approvalRequestedCount": {
+    "placeholders": {
+      "n": { "type": "String" }
+    }
+  },
   "approvalPleaseSelectClient": "Please select a client",
   "approvalPleaseAssignSite": "Please assign at least one site",
   "approvalOperatorSingleSite": "Operator can only have one site",
@@ -482,7 +578,11 @@
 
   "adminOverrideTitle": "Override Status",
   "adminOverrideCurrent": "Current: {s}",
-  "@adminOverrideCurrent": { "placeholders": { "s": { "type": "String" } } },
+  "@adminOverrideCurrent": {
+    "placeholders": {
+      "s": { "type": "String" }
+    }
+  },
   "adminOverrideReopenTitle": "Reopen a closed ticket?",
   "adminOverrideReasonTitle": "Reason for override",
   "adminOverrideReopenWarn": "You are reopening a closed ticket. The client will be notified.",
@@ -522,11 +622,23 @@
   "adminAssignSites": "Assign Sites",
 
   "itemsCount": "{count} items",
-  "@itemsCount": { "placeholders": { "count": { "type": "String" } } },
+  "@itemsCount": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "productTypesCount": "{count} product types",
-  "@productTypesCount": { "placeholders": { "count": { "type": "String" } } },
+  "@productTypesCount": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
   "issuesCount": "{count} issues",
-  "@issuesCount": { "placeholders": { "count": { "type": "String" } } },
+  "@issuesCount": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
 
   "adminNoZonesConfigured": "No zones configured",
 
@@ -546,26 +658,50 @@
   "siteActiveSubtitle": "Site appears in registration + ticket creation",
   "siteInactiveSubtitle": "Site hidden from users",
   "zoneLabel": "ZONE {i}",
-  "@zoneLabel": { "placeholders": { "i": { "type": "String" } } },
+  "@zoneLabel": {
+    "placeholders": {
+      "i": { "type": "String" }
+    }
+  },
   "zoneNameHint": "e.g. P1, Basement, North Gate",
   "zoneNameField": "Zone name",
   "zoneEntryPoints": "Entry points",
   "zoneExitPoints": "Exit points",
   "zonePreview": "PREVIEW",
   "entryN": "Entry {i}",
-  "@entryN": { "placeholders": { "i": { "type": "String" } } },
+  "@entryN": {
+    "placeholders": {
+      "i": { "type": "String" }
+    }
+  },
   "exitN": "Exit {i}",
-  "@exitN": { "placeholders": { "i": { "type": "String" } } },
+  "@exitN": {
+    "placeholders": {
+      "i": { "type": "String" }
+    }
+  },
   "zoneNameDuplicate": "Zone name already used",
   "siteCreateAction": "Create Site",
   "siteSaveChanges": "Save Changes",
   "siteMustHaveZone": "Site must have at least one zone",
   "siteZoneNameRequired": "Zone {i}: name is required",
-  "@siteZoneNameRequired": { "placeholders": { "i": { "type": "String" } } },
+  "@siteZoneNameRequired": {
+    "placeholders": {
+      "i": { "type": "String" }
+    }
+  },
   "zoneDuplicated": "Zone \"{name}\" is duplicated. Zone names must be unique.",
-  "@zoneDuplicated": { "placeholders": { "name": { "type": "String" } } },
+  "@zoneDuplicated": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "zoneNeedsLane": "Zone \"{name}\": add at least one entry or exit",
-  "@zoneNeedsLane": { "placeholders": { "name": { "type": "String" } } },
+  "@zoneNeedsLane": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
   "siteSaveFailed": "Failed to save site",
   "siteSelectClientRequired": "Please select a client",
 
@@ -591,7 +727,11 @@
   "pickerMultiHint": "You can pick multiple sites",
   "pickerSingleHint": "Pick exactly one site",
   "pickerSelectedCount": "{n} selected",
-  "@pickerSelectedCount": { "placeholders": { "n": { "type": "String" } } },
+  "@pickerSelectedCount": {
+    "placeholders": {
+      "n": { "type": "String" }
+    }
+  },
   "pickerSearchHint": "Search site name or address...",
   "pickerNoMatch": "No sites match your search",
 
@@ -609,5 +749,29 @@
   "technicianSearchHint": "Search tickets...",
 
   "ttNeedsAdvice": "Needs Advice",
-  "ttSolved": "Solved"
+  "ttSolved": "Solved",
+
+  "forgotPassword": "Forgot password?",
+  "whatsappNotInstalled": "WhatsApp is not installed on this device.",
+  "version": "Version {version}",
+  "@version": {
+    "placeholders": {
+      "version": { "type": "String" }
+    }
+  },
+
+  "resetPassword": "Reset Password",
+  "resetPasswordMessage": "Enter the email address you used to sign up. We'll send you a link to reset your password.",
+  "sendResetEmail": "Send Reset Email",
+  "emailSentSuccess": "Password reset email sent. Check your inbox.",
+
+  "signUpWithGoogle": "Sign up with Google",
+  "orContinueWith": "OR CONTINUE WITH",
+
+  "emailLabel": "Email",
+  "emailHintRegister": "you@company.com",
+  "invalidEmail": "Invalid email address",
+
+  "changePassword": "Change Password",
+  "updateLoginPassword": "Update your login password"
 }

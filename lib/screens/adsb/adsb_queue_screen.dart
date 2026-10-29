@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/ticket_model.dart';
 import '../../models/user_model.dart';
 import '../../services/ticket_service.dart';
 import '../../utils/date_formatter.dart';
+import '../../utils/ticket_localizer.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/filter_chip_row.dart';
-import '../../l10n/app_localizations.dart';
 import '../../widgets/status_badge.dart';
 import 'adsb_ticket_action_screen.dart';
 
@@ -25,10 +26,10 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;   // ← moved UP
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(t.adsbQueue)),   // ← removed const
+      appBar: AppBar(title: Text(t.adsbQueue)),
       body: StreamBuilder<List<Ticket>>(
         stream: _service.streamActiveTicketsForAdsb(),
         builder: (context, snapshot) {
@@ -48,10 +49,12 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
               .length;
 
           final filtered = switch (_filter) {
-            'pending' =>
-                allTickets.where((ticket) => ticket.status == 'pending').toList(),
-            'with_tt' =>
-                allTickets.where((ticket) => ticket.status == 'verified').toList(),
+            'pending' => allTickets
+                .where((ticket) => ticket.status == 'pending')
+                .toList(),
+            'with_tt' => allTickets
+                .where((ticket) => ticket.status == 'verified')
+                .toList(),
             'onsite' => allTickets
                 .where((ticket) =>
             ticket.status == 'pending_onsite' ||
@@ -66,10 +69,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 selectedValue: _filter,
                 onSelected: (v) => setState(() => _filter = v),
                 options: [
-                  FilterOption(
-                    label: t.adsbAllActive,   // ← removed const
-                    value: 'active',
-                  ),
+                  FilterOption(label: t.adsbAllActive, value: 'active'),
                   FilterOption(
                     label: t.adsbPending,
                     value: 'pending',
@@ -93,8 +93,8 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                     : filtered.isEmpty
                     ? EmptyState(
                   icon: Icons.check_circle_outline,
-                  title: t.allCaughtUp,        // ← removed const
-                  subtitle: t.noTicketsInView, // ← removed const
+                  title: t.allCaughtUp,
+                  subtitle: t.noTicketsInView,
                 )
                     : ListView.builder(
                   padding: const EdgeInsets.all(AppSpacing.lg),
@@ -111,6 +111,14 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
   }
 
   Widget _ticketTile(Ticket ticket, AppLocalizations t) {
+    final locale = Localizations.localeOf(context);
+    final localizer = TicketLocalizer();
+
+    final localizedProductType =
+    localizer.productType(ticket.productType, locale);
+    final localizedProductIssue =
+    localizer.productIssue(ticket.productIssue, locale);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Material(
@@ -156,7 +164,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  ticket.productType,
+                  localizedProductType,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -165,7 +173,7 @@ class _AdsbQueueScreenState extends State<AdsbQueueScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  ticket.productIssue,
+                  localizedProductIssue,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,

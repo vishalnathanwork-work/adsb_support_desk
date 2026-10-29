@@ -23,7 +23,7 @@ class AppBackground extends StatelessWidget {
           'assets/images/new_background.jpg',
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
-            color: const Color(6788B8FF),
+            color: const Color(0x6788B8FF),
           ),
         ),
 
